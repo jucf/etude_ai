@@ -1,0 +1,2161 @@
+---
+title: "Rapport d'analyse mensuel du projet de recherche L-Tips-UQTR"
+date: 
+dev: cairo_pdf
+df_print: paged
+output:
+  pdf_document:
+    latex_engine: xelatex
+bibliography: /Users/julescusson-fradet/Library/CloudStorage/GoogleDrive-jules.cusson.fradet@gmail.com/Mon disque/paperpile.bib
+csl: apa-6th-edition.csl
+params:
+   athlete_selected: params$athlete_selected
+   selection_debut: params$selection_debut
+   selection_fin: params$selection_fin
+# params:
+#    athlete_selected: "Georg Nikodym"
+#    selection_debut: "2024-03-07"
+#    selection_fin: "2024-04-03"
+header-includes:
+- \usepackage{makecell}
+- \usepackage{booktabs}
+- \usepackage{colortbl}
+- \pagenumbering{gobble}
+- \usepackage{graphicx}
+- \usepackage{fancyhdr}
+- \usepackage{float}
+- \pagestyle{fancy}
+- \addtolength{\headheight}{1.0cm}
+- \rhead{\includegraphics[height=1.2cm]{a-ltips.png}}
+- \renewcommand{\headrulewidth}{0pt}
+- \fancyfoot[C]{\thepage}
+- \usepackage[maxfloats=256]{morefloats}
+- \maxdeadcycles=1000
+- \usepackage[justification=raggedright,labelfont=bf,singlelinecheck=false]{caption}
+- \usepackage[labelsep=period]{caption}
+- \usepackage{titling}
+- \pretitle{\begin{center}
+- \includegraphics[width=6.5 in,height=20in]{homepagebanner.png}\LARGE\\}
+- \posttitle{\end{center}}
+# remove left headers
+- \fancyhead[LO]{}
+- \renewcommand{\contentsname}{}
+- \usepackage{ragged2e}
+urlcolor: blue
+linkcolor: black
+fontsize: 11pt
+mainfont: Arial
+fig_caption: yes
+classoption: svgnames
+toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	fig.align = "center",
+	fig.pos = "!ht"
+)
+options(knitr.table.format = "latex")
+
+# éviter notation scientifique pour chiffre
+options(scipen = 999)
+
+# packages 
+library(tidyverse)
+library(data.table)
+library(grid)
+library(googlesheets4)
+library(forcats)
+library(knitr)
+library(kableExtra)
+library(webshot)
+library(RCurl)
+library(httr)
+library(jsonlite)
+library(lubridate)
+library(zoo)
+library(roll)
+library(TTR)
+library(gridExtra)
+library(corrplot)
+library(janitor)
+library(openair)
+library(DT)
+library(skimr)
+library(ggnewscale)
+
+# load data
+data <- fread("database.csv") |> 
+  # change date columns for Idate (fread) to date
+  mutate(across(c(date, missed_form_date), as.Date))
+
+ppr <- read_csv("mmp.csv", guess_max = 10^10)  
+
+# découpage période graph
+intervalle <- "1 day"
+datebreaks <- seq(as.Date(params$selection_debut), as.Date(params$selection_fin), by = intervalle)
+
+# nom pour YAML
+nom_yaml <- paste0(params$athlete_selected)
+date_yaml <- paste0(params$selection_debut, " - ", params$selection_fin)
+
+# filtered data
+data_filt <- data %>%
+  filter(nom == params$athlete_selected) %>%
+  filter(between(
+    date,
+    as.Date(params$selection_debut),
+    as.Date(params$selection_fin)
+  )) |>
+  mutate(
+    training_phase = factor(training_phase, levels = c("overload", "recovery")),
+    competition = if_else(competition == "Oui", "competition", NA_character_),
+    training_phase = if_else(
+      !is.na(competition) & competition == "competition",
+      "competition",
+      as.character(training_phase)
+    ),
+    training_phase = recode(training_phase,
+                            "overload" = "Surcharge",
+                            "recovery" = "Faible volume",
+                            "competition" = "Compétition")
+  )
+
+ppr_filt <- ppr %>%
+    filter(nom == params$athlete_selected)
+
+# cp <- ppr_filt %>%
+#   slice(1) %>%
+#   pull(cp)
+
+cp <- data_filt %>%
+  filter(nom == params$athlete_selected) |>
+  select(icu_ftp_bike) |> 
+  na.omit() |> 
+  filter(icu_ftp_bike != 0) |> 
+  slice(1) |> 
+  rename(cp = icu_ftp_bike) |> 
+  mutate(cp = as.double(cp)) |> 
+  pull(cp)
+```
+
+---
+author: `r date_yaml`
+date: `r nom_yaml`
+---
+
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+
+\center 
+
+Analyse et production 
+
+**Jules Cusson-Fradet**, M.Sc. 
+
+Candidat au doctorat 
+
+Laboratoire de technologies & d'innovation pour la performance sportive (L-Tips) 
+
+\newpage
+
+**Tables des matières**
+
+\vspace{-1cm}
+
+\tableofcontents
+
+\newpage
+
+\pagenumbering{arabic}
+
+\raggedright
+
+```{r assiduite, results = 'asis'}
+# Assuming your dataframe is named df
+filtered_df <- data_filt %>%
+  group_by(nom) %>%
+  # filter df to get the first day the form was filled
+  filter(date >= date[which.min(is.na(overall_recovery))]) %>%
+  ungroup()
+
+# Assuming your dataset is named df
+# First, calculate the earliest and latest response dates for each person (nom)
+response_dates <- filtered_df |>
+  group_by(nom) |>
+  summarize(first_response_date = min(date),
+            last_response_date = max(date))
+
+# Create a sequence of dates from the earliest to the latest response date for each person
+full_date_period <- response_dates |>
+  mutate(date = map2(
+    first_response_date,
+    last_response_date,
+    ~ seq.Date(from = .x, to = .y, by = "1 day")
+  )) |>
+  unnest(date)
+
+# Merge the full date period with the original dataset to fill in missing dates
+full_df <- full_date_period |>
+  left_join(filtered_df, by = c("nom", "date"))
+
+# Now, calculate the percentage of responses for each person
+percentage_responses <- full_df %>%
+  select(nom, date, overall_recovery, load_rpe_velo, icu_joules_bike, lutrimp_bike) |> 
+  # vars 0 to NA
+  mutate_if(is.numeric, list(~ ifelse(. == 0, NA, .))) |> 
+  group_by(nom) %>%
+  # summarize but not for date column
+  summarize(across(-date, ~ sum(!is.na(.)) / length(.)),
+            total_days = n_distinct(date)) %>%
+  mutate(
+    form_percent = round(overall_recovery * 100),
+    icu_joules_bike_percent = round(icu_joules_bike / load_rpe_velo * 100),
+    # correction si plus de jour avec pwr ou fc que rpe
+    icu_joules_bike_percent = ifelse(icu_joules_bike_percent > 100, 100, icu_joules_bike_percent),
+    lutrimp_bike_percent = round(lutrimp_bike / icu_joules_bike * 100),
+    # correction si moins de jour avec pwr que fc
+    lutrimp_bike_percent = ifelse(lutrimp_bike_percent > 100, 100, lutrimp_bike_percent)
+  ) %>%
+  ungroup() %>%
+  select(nom,
+         total_days,
+         form_percent,
+         icu_joules_bike_percent,
+         lutrimp_bike_percent)
+```
+
+### Informations sur la période analysée
+
+\vspace{-12pt}
+
+(`r date_yaml`)
+
+* Votre pourcentage de réponses au questionnaire est de **`r (percentage_responses$form_percent)`**%. 
+* Vous avez utilisé votre  capteur de puissance pour **`r (percentage_responses$icu_joules_bike_percent)`**% de vos entraînements notés via le questionnaire.  
+* Vous avez utilisé votre moniteur de fréquence cardiaque pour **`r (percentage_responses$lutrimp_bike_percent)`**% de vos entraînements enregistrés avec capteur de puissance.
+
+\justifying
+
+**Questions?** 
+
+Écrivez moi via [courriel](mailto:jules.cusson-fradet@uqtr.ca)
+
+\newpage
+
+\center 
+
+### Charge d'entraînement multisport et mesures descriptives
+
+```{r globale, fig.width=11, fig.height=13.25,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives (voir page suivante pour les détails)."}
+#charge
+gg1 <- ggplot(data_filt %>% filter(!is.na(load_rpe)), aes(date, weight = load_rpe / 1000)) +
+  geom_rug(sides = "b", size = 4.5, aes(color = training_phase)) +
+  scale_color_manual(
+    name = "Phases:",
+    values = alpha(
+      c(
+        "Faible volume" = "#00FA9A",
+        "Surcharge" = "#FF6A6A",
+        "Compétition" = "black"
+      ),
+      .5
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  geom_bar(aes(fill = "Données journalières"), width = 0.4, alpha = 0.5) +
+  geom_area(aes(y = aigue_7_load_rpe / 1000, fill = "Aiguë (7 jours)"), alpha = 0.85) +
+  geom_line(aes(y = aigue_7_load_rpe / 1000, group = 1), color = "#FF8247", size = 1.25) +
+  geom_area(aes(y = chronique_42_load_rpe / 1000, fill = "Chronique (42 jours)"), alpha = 0.5) +
+  geom_line(aes(y = chronique_42_load_rpe / 1000, group = 1), color = "#1E90FF", size = 1.25) +
+  scale_fill_manual(
+    name = "",
+    values = c(
+      "Données journalières" = "grey",
+      "Aiguë (7 jours)" = "#FF8247",
+      "Chronique (42 jours)" = "#1E90FF"
+    ),
+    drop = FALSE
+  ) +
+  scale_x_date(breaks = "1 day", date_labels = "%d") +
+  labs(y = "Charge (UA) \n", x = "") +
+  ggtitle("Charge d'entraînement - sRPE (Durée x RPE)") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 2),
+         fill = guide_legend(order = 1))
+
+#ACWR
+df_ACWR <- data_filt %>%
+  filter(!is.na(ACWR_load_rpe)) %>%
+  mutate(ACWR_load_rpe = round(ACWR_load_rpe, digits = 1))
+
+gg2 <-
+  ggplot(df_ACWR %>% filter(!is.na(load_rpe)),
+         aes(x = date, y = ACWR_load_rpe, fill = ACWR_load_rpe)) +
+  geom_bar(stat = "identity", width = 0.4,  alpha = 0.6, aes(fill = cut(ACWR_load_rpe, c(
+    -Inf, 0.8, 1.3, 1.5, Inf
+  )))) +
+  scale_fill_manual(
+    name = "",
+    values = c(
+      "(-Inf,0.8]" = "grey",
+      "(0.8,1.3]" = "#00FA9A",
+      "(1.3,1.5]" = "#EEB422",
+      "(1.5, Inf]" = "#FF6A6A"
+    ),
+    labels = c(
+      "Faible charge, risque quelconque",
+      "Charge optimale",
+      "Risque moyen",
+      "Risque élevé"
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  scale_x_date(breaks = "1 day", date_labels = "%d") +
+  labs(y = "Aiguë / Chronique\n", x = "") +
+  ggtitle("Risque de maladaptation") +
+  theme_minimal() +
+  #match order risque blessure
+  guides(fill = guide_legend(reverse = TRUE)) +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank()
+  )
+
+#fraîcheur
+ath_fra <- data_filt %>%
+  filter(!is.na(fraicheur_load_rpe)) %>%
+  mutate(fraicheur_load_rpe = round(fraicheur_load_rpe, digits = 1))
+
+gg3 <-
+  ggplot(ath_fra %>% filter(!is.na(load_rpe)),
+         aes(x = date, y = fraicheur_load_rpe / 1000, fill = fraicheur_load_rpe)) +
+  geom_bar(stat = "identity", width = 0.4,  alpha = 0.6, aes(fill = cut(fraicheur_load_rpe / 1000, c(
+    -Inf, -0.5, 0, 0.9, Inf
+  )))) +
+  scale_fill_manual(
+    name = "",
+    values = c(
+      "(-Inf,-0.5]" = "#FF6A6A",
+      "(-0.5,0]" = "#EEB422",
+      "(0,0.9]" = "#00FA9A",
+      "(0.9, Inf]" = "grey"
+    ),
+    labels = c(
+      "Très haute charge aigue, faible fraîcheur",
+      "Haute charge aigue",
+      "Prêt à performer",
+      "Faible charge, récupération"
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  scale_x_date(breaks = "1 day", date_labels = "%d") +
+  labs(y = "Chronique - Aiguë\n", x = "") +
+  ggtitle("Fraîcheur") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank()
+  )
+
+#monotonie
+ath_mono <- data_filt %>%
+  filter(!is.na(monotonie_load_rpe)) %>%
+  mutate(monotonie_load_rpe = round(monotonie_load_rpe, digits = 1))
+
+gg4 <-
+  ggplot(ath_mono %>% filter(!is.na(load_rpe)),
+         aes(x = date, y = monotonie_load_rpe, fill = monotonie_load_rpe)) +
+  geom_bar(stat = "identity", width = 0.4,  alpha = 0.6, aes(fill = cut(monotonie_load_rpe, c(0, 1.5, 2, Inf)))) +
+  scale_fill_manual(
+    name = "",
+    values = c(
+      "(0,1.5]" = "#00FA9A",
+      "(1.5,2]" = "#EEB422",
+      "(2,Inf]" = "#FF6A6A"
+    ),
+    labels = c(
+      "Entraînement variable (faible monotonie)",
+      "Entraînement modérément variable",
+      "Entraînement très répétitif (monotonie élevée)"
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+    scale_x_date(breaks = "1 day", date_labels = "%b %e %a") +
+  labs(y = "Variabilité (SD 7j)\n", x = "") +
+  ggtitle("Monotonie") +
+  theme_minimal() +
+  #match order risque blessure
+  guides(fill = guide_legend(reverse = TRUE)) +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(colour = "#A6A6A6", angle = 90),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
+    legend.margin = margin(t = 0, unit = 'cm')
+  )
+
+grid.arrange(
+  arrangeGrob(gg1, ncol = 1, nrow = 1),
+  arrangeGrob(gg2, ncol = 1, nrow = 1),
+  arrangeGrob(gg3, ncol = 1, nrow = 1),
+  arrangeGrob(gg4, ncol = 1, nrow = 1),
+  heights = c(3, 2.125, 2.75, 2.125)
+)
+```
+
+\newpage
+
+\justifying
+
+**Charge d’entraînement chronique**:
+
+Représente la charge moyenne réalisée dans les derniers 42 jours. En général, vous pouvez voir la charge chronique comme un indicateur du niveau de condition physique: plus votre corps a été exposé à une charge moyenne élevée, plus votre potentiel de performance est grand [@Banister1975-es].
+
+**Charge d’entraînement aiguë**:
+
+Représente votre charge d'entraînement moyenne réalisée dans les 7 derniers jours. La charge d’entraînement aiguë est liée à la fatigue: une augmentation de la fréquence, de la durée et de l'intensité des entraînements au cours des derniers jours entraîne une fatigue plus élevée [@Banister1975-es].
+
+**Phases**: Phases d’entraînement notées dans le questionnaire.  
+
+**Risque de maladaptation**: 
+
+Le ratio entre votre charge d’entraînement aiguë et votre charge chronique peut être utilisé pour déterminer le risque de maladaptation ou de blessure. Une charge d’entraînement aiguë élevée et une charge d’entraînement chronique faible sont des signes avant-coureurs de maladaptation à l’entraînement puisque nous stressons le corps plus qu’il n’en a l’habitude [@Gabbett2016-tv].
+
+**Fraîcheur**: 
+
+La différence entre votre charge chronique (≈condition physique) et votre charge aiguë (≈fatigue) peut être utilisée pour déterminer le niveau de préparation à la performance. Une valeur optimale est généralement un peu au-dessus de zéro [@Banister1975-es].
+
+**Monotonie**: 
+
+Fait référence à la similitude de l’entraînement dans les 7 derniers jours. Une faible monotonie est normalement associée à des méthodes de périodisation alternant des entraînements à haute et basse intensité. Une valeur élevée indique que l’entraînement peut être inefficace et conduire à une stagnation ou à un manque d’amélioration [@Foster1998-ue].
+
+\newpage
+
+\center
+
+### État d'entraînement
+
+```{r perf, results = 'asis', fig.width=11, fig.height=13.5, fig.cap="Analyse des variations de l'état d'entraînement (voir page suivante pour les détails)."}
+df_j_lutrimp_rpe_ravg <- data_filt %>%
+    filter(nom == params$athlete_selected) %>%
+    filter(between(
+      date,
+      as.Date(params$selection_debut),
+      as.Date(params$selection_fin)
+    )) %>%
+    select(
+      date,
+      ACWR_rpe_g,
+      ACWR_lutrimp_g,
+      ACWR_j_g,
+      ACWR_rpe_g_ravg,
+      ACWR_lutrimp_g_ravg,
+      ACWR_j_g_ravg,
+      ACWR_rpe_g_ravg_sd,
+      ACWR_lutrimp_g_ravg_sd,
+      ACWR_j_g_ravg_sd,
+      load_rpe_velo,
+      lutrimp_bike,
+      icu_joules_bike
+    ) %>%
+    mutate_at(vars(load_rpe_velo,
+                   lutrimp_bike,
+                   icu_joules_bike),
+              ~ replace(., is.na(.), 0)) %>%
+    # remplacer NA par dernière valeur pour éviter drop data
+    na.locf(na.rm = FALSE)
+  
+  gg_j_lutrimp_rpe_ravg <- df_j_lutrimp_rpe_ravg %>%
+    ggplot(aes(x = date)) +
+     geom_rug(sides = "b", size = 5, aes(color = data_filt$training_phase)) +
+  scale_color_manual(
+    name = "Phases:",
+    values = alpha(
+      c(
+        "Faible volume" = "#00FA9A",
+        "Surcharge" = "#FF6A6A",
+        "Compétition" = "black"
+      ),
+      .5
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+    new_scale_color() +
+    geom_line(aes(y = ACWR_j_g_ravg,
+                  color = "Travail - Joules (aiguë/chronique)"),
+              size = 1) +
+    geom_ribbon(aes(
+      ymin = (ACWR_j_g_ravg - ACWR_j_g_ravg_sd),
+      ymax = (ACWR_j_g_ravg + ACWR_j_g_ravg_sd)
+    ),
+    fill = alpha("#6633CC", .3)) +
+    geom_line(aes(y = ACWR_lutrimp_g_ravg,
+                  color = "LuTRIMP - Fc (aiguë/chronique)"),
+              size = 1.25) +
+    geom_ribbon(aes(
+      ymin = (ACWR_lutrimp_g_ravg - ACWR_lutrimp_g_ravg_sd),
+      ymax = (ACWR_lutrimp_g_ravg + ACWR_lutrimp_g_ravg_sd)
+    ),
+    fill = alpha("#DD0347", .3)) +
+    geom_line(aes(y = ACWR_rpe_g_ravg,
+                  color = "sRPE (aiguë/chronique)"),
+              size = 1.25) +
+    geom_ribbon(aes(
+      ymin = (ACWR_rpe_g_ravg - ACWR_rpe_g_ravg_sd),
+      ymax = (ACWR_rpe_g_ravg + ACWR_rpe_g_ravg_sd)
+    ),
+    fill = alpha("#48D1CC", .3)) +
+    labs(x = "", y = "Aiguë / Chronique\n") +
+    ggtitle("Charge externe vs interne") +
+    scale_color_manual(name = "",
+                       values = alpha(
+                         c(
+                           "Travail - Joules (aiguë/chronique)" = "#6633CC",
+                           "LuTRIMP - Fc (aiguë/chronique)" = "#DD0347",
+                           "sRPE (aiguë/chronique)" = "#48D1CC"
+                         ),
+                         .6
+                       ),
+                       drop = FALSE) +
+    scale_x_date(breaks = datebreaks, date_labels = "%a %d") +
+    theme_minimal() +
+    theme(
+      legend.position = "top",
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      panel.grid.minor.x = element_blank(),
+      legend.margin = margin(t = 0, unit = 'cm')
+    ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+  
+  # TID
+  df_tid <- data_filt %>%
+    select(date, zone1_bike, zone2_bike, zone3_bike) %>%
+    group_by(jour = cut(date, "day")) %>%
+    summarise_at(vars(zone1_bike, zone2_bike, zone3_bike),  sum, na.rm = TRUE) %>%
+    mutate(
+      zone1_pct = (zone1_bike / (zone1_bike + zone2_bike + zone3_bike) * 100),
+      zone2_pct = (zone2_bike / (zone1_bike + zone2_bike + zone3_bike) * 100),
+      zone3_pct = (zone3_bike / (zone1_bike + zone2_bike + zone3_bike) * 100)
+    ) %>%
+    pivot_longer(
+      cols = c(zone1_pct, zone2_pct, zone3_pct),
+      names_to = "zones",
+      values_to = "pourcentage"
+    ) %>%
+    group_by(zones) %>%
+    mutate(
+      pourcentage_ravg = rollapply(
+        pourcentage,
+        7,
+        mean,
+        na.rm = TRUE,
+        fill = NA,
+        align = 'right',
+        partial = TRUE
+      )
+    ) %>%
+    ungroup() %>%
+    mutate(
+      jour = as.Date(jour, jour = "%Y-%m-%d"),
+      zones = recode_factor(
+        zones,
+        zone1_pct = "zone 1 (%)",
+        zone2_pct = "zone 2 (%)",
+        zone3_pct = "zone 3 (%)"
+      )
+    )
+  
+  gg_tid <- df_tid %>%
+    ggplot(aes(
+      y = pourcentage_ravg,
+      x = jour,
+      fill = fct_rev(zones)
+    )) +
+    geom_area(aes(color = fct_rev(zones)), size = 1) +
+    scale_fill_manual(
+      values = alpha(c("#FF6A6A", "#EEB422", "#00FA9A"), 0.5),
+      drop = FALSE,
+      guide = guide_legend(reverse = TRUE)
+    ) +
+    scale_color_manual(
+      name = "",
+      values = c("#FF6A6A", "#EEB422", "#00FA9A"),
+      guide = FALSE
+    ) +
+    scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+    labs(y = "Pourcentage (%)\n", x = "") +
+    scale_y_continuous(breaks = seq(from = 0, to = 100, by = 20)) +
+    coord_cartesian(ylim = c(min(0), max(100)),
+                    expand = TRUE,
+                    default = TRUE) +
+    ggtitle("Pourcentages par zone (W)") +
+    theme_minimal() +
+    theme(
+      legend.position = "top",
+      legend.title = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      axis.text.x = element_blank(),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      legend.margin = margin(t = 0, unit = 'cm')
+    )
+  
+    gg_hrv <- data_filt %>%
+    # remplacer NA par dernière valeur
+    na.locf(na.rm = FALSE) %>%
+    ggplot(aes(date)) +
+    geom_ribbon(aes(
+      ymin = (hrv_ravg60 - hrv_norm),
+      ymax = (hrv_ravg60 + hrv_norm),
+      fill = "Valeurs normales (60 jours)"
+    )) +
+    scale_fill_manual(
+      name = "",
+      values = alpha("#DD06A7", .3),
+      labels = "Valeurs normales (60 jours)",
+      drop = FALSE
+    ) +
+    geom_line(aes(y = hrv_ravg7, color = "Tendance (7 jours)"),
+              lwd = 1.5) +
+    scale_color_manual(
+      name = "",
+      values = alpha("#DD06A7", .6),
+      labels = "Tendance (7 jours)",
+      drop = FALSE
+    ) +
+    scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+    labs(x = "", y = "RMSSD\n") +
+    ggtitle("HRV") +
+    theme_minimal() +
+    theme(
+      legend.position = "top",
+      legend.title = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      plot.title = element_text(margin = margin(b = -10)),
+      legend.margin = margin(t = 0, unit = 'cm')
+    ) +
+    guides(color = guide_legend(order = 1),
+           fill = guide_legend(order = 2))
+  
+  gg_wel <-
+    ggplot(data_filt %>% filter(!is.na(wellness)),
+           aes(date, wellness, color = wellness)) +
+    geom_point(size = 2) +
+    geom_line() +
+    scale_color_gradient2(
+      low = "#FF6A6A",
+      mid = "grey",
+      high = "#00FA9A",
+      midpoint = 0,
+      guide = FALSE
+    ) +
+    geom_hline(yintercept = 0, lty = 3) +
+    scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+    labs(x = "", y = "Score Z\n") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      axis.title.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank()
+    ) +
+    ggtitle("Bien-être (état de récupération & stress)")
+  
+  # #wellness t
+  # gg_well <-
+  #   ggplot(data_filt %>% filter(!is.na(wellness_t)),
+  #          aes(date, weight = wellness_t)) +
+  #   geom_ribbon(aes(
+  #     ymin = (wellness_t_ravg60 - wellness_norm_t),
+  #     ymax = (wellness_t_ravg60 + wellness_norm_t),
+  #     fill = "Valeurs normales (60 jours)"
+  #   )) +
+  #   scale_fill_manual(
+  #     name = "",
+  #     values = alpha(c("#00BFFF"), .2),
+  #     labels = "Valeurs normales (60 jours)",
+  #     drop = FALSE
+  #   ) +
+  #   geom_line(aes(y = wellness_t_ravg7, color = "Tendance (7 jours)"),
+  #             lwd = 1.5) +
+  #   scale_color_manual(
+  #     name = "",
+  #     values = "#69b3a2",
+  #     labels = "Tendance (7 jours)",
+  #     drop = FALSE
+  #   ) +
+  #   theme_minimal() +
+  #   scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  #   labs(x = "", y = "Score T\n") +
+  #   ggtitle("Bien-être (état de récupération & stress)") +
+  #   theme(
+  #     legend.position = "top",
+  #     legend.title = element_blank(),
+  #     axis.ticks.y = element_blank(),
+  #     axis.title.x = element_blank(),
+  #     axis.text.x = element_blank(),
+  #     axis.text.y = element_text(colour = "#A6A6A6"),
+  #     axis.title.y = element_text(colour = "#A6A6A6"),
+  #     panel.grid.minor.x = element_blank(),
+  #     panel.grid.minor.y = element_blank(),
+  #     plot.title = element_text(margin = margin(b = -10)),
+  #     legend.margin = margin(t = 0, unit = 'cm')
+  #   ) +
+  #   guides(color = guide_legend(order = 1),
+  #          fill = guide_legend(order = 2))
+  
+  #perfromance
+  gg_perf <-
+    ggplot(data_filt %>% filter(!is.na(feeling_training_mean_velo)),
+           aes(date, weight = feeling_training_mean_velo)) +
+    geom_ribbon(aes(
+      ymin = (feeling_training_mean_velo_ravg60_bike - feeling_training_mean_velo_norm),
+      ymax = (feeling_training_mean_velo_ravg60_bike + feeling_training_mean_velo_norm),
+      fill = "Valeurs normales (60 jours)"
+    )) +
+    scale_fill_manual(
+      name = "",
+      values = alpha(c("#00BFFF"), .2),
+      labels = "Valeurs normales (60 jours)",
+      drop = FALSE
+    ) +
+    geom_line(aes(y = feeling_training_mean_velo_ravg7, color = "Tendance (7 jours)"),
+              lwd = 1.5) +
+    scale_color_manual(
+      name = "",
+      values = "#69b3a2",
+      labels = "Tendance (7 jours)",
+      drop = FALSE
+    ) +
+    theme_minimal() +
+    scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+    labs(x = "", y = "(1-11)\n") +
+    ggtitle("Performance perçue") +
+    theme(
+      legend.position = "top",
+      legend.title = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_text(colour = "#A6A6A6"),
+      axis.title.y = element_text(colour = "#A6A6A6"),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      plot.title = element_text(margin = margin(b = -10)),
+      legend.margin = margin(t = 0, unit = 'cm')
+    ) +
+    guides(color = guide_legend(order = 1),
+           fill = guide_legend(order = 2))
+  
+  gg_aero <- data_filt %>%
+    filter(efficacite_aerobique_ravg7_bike != 0) |> 
+    # remplacer NA par dernière valeur
+    na.locf(na.rm = FALSE) %>%
+    ggplot(aes(date)) +
+    geom_ribbon(aes(
+      ymin = (efficacite_aerobique_ravg60_bike - efficacite_aerobique_norm_bike),
+      ymax = (efficacite_aerobique_ravg60_bike + efficacite_aerobique_norm_bike),
+      fill = "Valeurs normales (60 jours)"
+    )) +
+    scale_fill_manual(
+      name = "",
+      values = alpha("#FF6A6A", .3),
+      labels = "Valeurs normales (60 jours)",
+      drop = FALSE
+    ) +
+    geom_line(aes(y = efficacite_aerobique_ravg7_bike, color = "Tendance (7 jours)"),
+              lwd = 1.5) +
+    scale_color_manual(
+      name = "",
+      values = alpha("#DD0347", .6),
+      labels = "Tendance (7 jours)",
+      drop = FALSE
+    ) +
+    scale_x_date(breaks = "1 day", date_labels = "%b %e %a") +
+    labs(x = "", y = "W / Fc\n") +
+    ggtitle("Efficacité") +
+    theme_minimal() +
+    theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(colour = "#A6A6A6", angle = 90),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+    guides(color = guide_legend(order = 1),
+           fill = guide_legend(order = 2))
+  
+  graphs <- grid.arrange(
+    arrangeGrob(gg_j_lutrimp_rpe_ravg, ncol = 1, nrow = 1),
+    arrangeGrob(gg_tid, ncol = 1, nrow = 1),
+    arrangeGrob(gg_hrv, ncol = 1, nrow = 1),
+    arrangeGrob(gg_wel, ncol = 1, nrow = 1),
+    arrangeGrob(gg_perf, ncol = 1, nrow = 1),
+    arrangeGrob(gg_aero, ncol = 1, nrow = 1),
+    heights = c(2.8, 1.8, 1.25, 1.25, 1.25, 1.65)
+  )
+```
+
+\newpage
+
+\justifying
+
+**Charges externe vs interne**: 
+
+Comparaison des ratios aiguë/chronique de charges externe **Travail - Joules** et interne **LuTRIMP - Fc** [@Lucia2003-cr] et **sRPE** [@Foster1998-ue]. Lorsque le ratio est égal à 1, la charge aiguë est égale à la charge chronique: la charge d’entraînement est stable. La charge est en augmentation lorsque le ratio est supérieur à 1 et en diminution si inférieur à 1. Les ratios de charge externe et interne sont normalement «couplés» et évoluent ensemble. Lorsqu’il y a un «découplage» entre la charge externe et interne, nous pouvons déceler une variation de l’état d’entraînement [@Impellizzeri2019-bw]. Typiquement, lorsque la charge externe monte plus rapidement que la charge interne, l’athlète est performant et peu fatigué. À l’inverse, lorsque la charge interne monte plus rapidement que la charge externe, l’athlète est possiblement en état de surmenage. Les bandes de couleur translucides autour des lignes de tendance indiquent la variation normale (écart-type). Un «découplage» est considéré comme important si les bandes translucides ne se chevauchent pas.Seuls les entraînements avec des données de puissance, de fréquence cardiaque et de RPE sont utilisés pour l'analyse.  
+
+**Phases**: Phases d’entraînement notées dans le questionnaire.  
+
+**Pourcentages par zone (W)**: 
+
+Distribution de l'intensité journalière selon le modèle de 3 zones de puissance [@Seiler2006-qa]. Les zones de puissance sont établies à partir d’une puissance critique de **`r cp`** Watts (valeur indiquée sur votre profil intervals.icu [FTP]) conformément aux pourcentages suivants: z1=0-75%, z2=76-105%, z3=106%-+.
+
+**HRV**: 
+
+Variabilité de la fréquence cardiaque (HRV) au repos. La bande de couleur translucide (Valeurs normales (60 jours)) autour de la ligne de tendance (Tendance (7 jours)) indique la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
+
+**Bien-être (état de récupération & stress)**: 
+
+Score Z combiné pour les 8 variables de récupération et de stress. Une valeur positive indique que l'état est à la hausse et vice-versa. Une valeur de 0 indique que l'état est stable. 
+
+**Performance perçue**: 
+
+Niveau de performance perçue lors de l'entraînement ou de la compétition cycliste. La bande de couleur translucide (Valeurs normales (60 jours)) autour de la ligne de tendance (Tendance (7 jours)) indique la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
+
+**Efficacité**: 
+
+Relation entre la puissance et la fréquence cardiaque. Intuitivement, une fréquence cardiaque plus basse pour la même puissance se traduit par une meilleure efficacité, c'est-à-dire, un coût interne plus faible pour la même charge externe. De même, une puissance plus élevée à la même fréquence cardiaque est liée à une meilleure efficacité. La bande de couleur translucide (Valeurs normales (60 jours)) autour de la ligne de tendance (Tendance (7 jours)) indique la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
+
+\newpage
+
+\center 
+
+### État de récupération
+
+```{r recup, fig.width=11, fig.height=13.25, fig.cap="Analyse des variations de l'état de récupération (voir page suivante pour les détails)."}
+gg_recup <- ggplot(data_filt %>% filter(!is.na(overall_recovery)),
+       aes(date, weight = overall_recovery)) +
+  geom_rug(sides = "b", size = 6.5, aes(color = training_phase)) +
+  scale_color_manual(
+    name = "Phases:",
+    values = alpha(
+      c(
+        "Faible volume" = "#00FA9A",
+        "Surcharge" = "#FF6A6A",
+        "Compétition" = "black"
+      ),
+      .5
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (overall_recovery_ravg60 - overall_recovery_norm),
+    ymax = (overall_recovery_ravg60 + overall_recovery_norm),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  new_scale_color() +
+  geom_line(aes(y = overall_recovery_ravg7, color = "Tendance (7 jours)"),
+            lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = c("Tendance (7 jours)" = "#69b3a2"),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  theme_minimal() +
+  ggtitle("Récupération globale") +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_phys <-
+  ggplot(data_filt %>% filter(!is.na(physical_performance_capability)),
+         aes(date, weight = physical_performance_capability)) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (
+      physical_performance_capability_ravg60 - physical_performance_capability_norm
+    ),
+    ymax = (
+      physical_performance_capability_ravg60 + physical_performance_capability_norm
+    ),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  geom_line(aes(y = physical_performance_capability_ravg7, color = "Tendance (7 jours)"),
+            lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = "#69b3a2",
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(
+    from = min(data_filt$physical_performance_capability, na.rm = TRUE),
+    to = max(data_filt$physical_performance_capability, na.rm = TRUE),
+    by = 1
+  )) +
+  coord_cartesian(ylim = c(
+    min(data_filt$physical_performance_capability, na.rm = TRUE),
+    max(data_filt$physical_performance_capability, na.rm = TRUE)
+  ),
+  expand = TRUE,
+  default = TRUE) +
+  ggtitle("Capacité physique") +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_mental <-
+  ggplot(data_filt %>% filter(!is.na(mental_performance_capability)),
+         aes(date, weight = mental_performance_capability)) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (
+      mental_performance_capability_ravg60 - mental_performance_capability_norm
+    ),
+    ymax = (
+      mental_performance_capability_ravg60 + mental_performance_capability_norm
+    ),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  geom_line(aes(y = mental_performance_capability_ravg7, color = "Tendance (7 jours)"),
+            lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = "#69b3a2",
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(
+    from = min(data_filt$mental_performance_capability, na.rm = TRUE),
+    to = max(data_filt$mental_performance_capability, na.rm = TRUE),
+    by = 1
+  )) +
+  coord_cartesian(ylim = c(
+    min(data_filt$mental_performance_capability, na.rm = TRUE),
+    max(data_filt$mental_performance_capability, na.rm = TRUE)
+  ),
+  expand = TRUE,
+  default = TRUE) +
+  ggtitle("Capacité mentale") +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_bal_emo <-
+  ggplot(data_filt %>% filter(!is.na(emotional_balance)),
+         aes(date, weight = emotional_balance)) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (emotional_balance_ravg60 - emotional_balance_norm),
+    ymax = (emotional_balance_ravg60 + emotional_balance_norm),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  geom_line(aes(y = emotional_balance_ravg7, color = "Tendance (7 jours)"),
+            lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = "#69b3a2",
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(
+    from = min(data_filt$emotional_balance, na.rm = TRUE),
+    to = max(data_filt$emotional_balance, na.rm = TRUE),
+    by = 1
+  )) +
+  coord_cartesian(ylim = c(
+    min(data_filt$emotional_balance, na.rm = TRUE),
+    max(data_filt$emotional_balance, na.rm = TRUE)
+  ),
+  expand = TRUE,
+  default = TRUE) +
+  ggtitle("Balance émotionnelle") +
+  scale_x_date(breaks = "1 day", date_labels = "%b %e %a") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(colour = "#A6A6A6", angle = 90),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+grid.arrange(gg_recup,
+             gg_phys,
+             gg_mental,
+             gg_bal_emo,
+             ncol = 1) 
+```
+\newpage
+
+\raggedright
+
+* **Récupération globale** (p. ex. frais, reposé, détendu musculairement, détendu physiquement)
+
+* **Capacité physique** (ex: fort, physiquement capable, énergique, plein de puissance)
+
+* **Capacité mentale** (ex: attentif, réceptif, mentalement alerte, concentré)
+
+* **Balance émotionnelle** (ex: content, stable, de bonne humeur, ayant tout sous contrôle)
+
+**Phases**: Phases d’entraînement notées dans le questionnaire.  
+
+\justifying
+
+**Notes**: 
+
+Short Recovery and Stress Scale (SRSS) [@Kolling2020-pc]
+
+Les échelles de notation du questionnaire (0-6) ont été transformées (1-7) pour permettre de visualiser graphiquement les notes de 0.
+
+Les bandes de couleur translucides (Valeurs normales (60 jours)) autour des lignes de tendance (Tendance (7 jours)) indiquent la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
+
+\newpage
+
+\center 
+
+### État de stress
+
+```{r stress, fig.width=11, fig.height=13.25, fig.cap="Analyse des variations de l'état de stress (voir page suivante pour les détails)."}
+gg_stress <-
+  ggplot(data_filt %>% filter(!is.na(overall_stress)),
+         aes(date, weight = overall_stress)) +
+  geom_rug(sides = "b", size = 6.5, aes(color = training_phase)) +
+  scale_color_manual(
+    name = "Phases:",
+    values = alpha(
+      c(
+        "Faible volume" = "#00FA9A",
+        "Surcharge" = "#FF6A6A",
+        "Compétition" = "black"
+      ),
+      .5
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (overall_stress_ravg60 - overall_stress_norm),
+    ymax = (overall_stress_ravg60 + overall_stress_norm),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  new_scale_color() +
+  geom_line(aes(y = overall_stress_ravg7, color = "Tendance (7 jours)"), lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = c("Tendance (7 jours)" = "#69b3a2"),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  ggtitle("Stress global") +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_musc <-
+  ggplot(data_filt %>% filter(!is.na(muscular_stress)),
+         aes(date, weight = muscular_stress)) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (muscular_stress_ravg60 - muscular_stress_norm),
+    ymax = (muscular_stress_ravg60 + muscular_stress_norm),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  geom_line(aes(y = muscular_stress_ravg7, color = "Tendance (7 jours)"), lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = "#69b3a2",
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(
+    from = min(data_filt$muscular_stress, na.rm = TRUE),
+    to = max(data_filt$muscular_stress, na.rm = TRUE),
+    by = 1
+  )) +
+  coord_cartesian(ylim = c(
+    min(data_filt$muscular_stress, na.rm = TRUE),
+    max(data_filt$muscular_stress, na.rm = TRUE)
+  ),
+  expand = TRUE,
+  default = TRUE) +
+  ggtitle("Stress musculaire") +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_acti <-
+  ggplot(data_filt %>% filter(!is.na(lack_of_activation)),
+         aes(date, weight = lack_of_activation)) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (lack_of_activation_ravg60 - lack_of_activation_norm),
+    ymax = (lack_of_activation_ravg60 + lack_of_activation_norm),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  geom_line(aes(y = lack_of_activation_ravg7, color = "Tendance (7 jours)"),
+            lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = "#69b3a2",
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(
+    from = min(data_filt$lack_of_activation, na.rm = TRUE),
+    to = max(data_filt$lack_of_activation, na.rm = TRUE),
+    by = 1
+  )) +
+  coord_cartesian(ylim = c(
+    min(data_filt$lack_of_activation, na.rm = TRUE),
+    max(data_filt$lack_of_activation, na.rm = TRUE)
+  ),
+  expand = TRUE,
+  default = TRUE) +
+  ggtitle("Manque d'activation") +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_neg_emo <-
+  ggplot(data_filt %>% filter(!is.na(negative_emotional_state)),
+         aes(date, weight = negative_emotional_state)) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (
+      negative_emotional_state_ravg60 - negative_emotional_state_norm
+    ),
+    ymax = (
+      negative_emotional_state_ravg60 + negative_emotional_state_norm
+    ),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  geom_line(aes(y = negative_emotional_state_ravg7, color = "Tendance (7 jours)"),
+            lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = "#69b3a2",
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(
+    from = min(data_filt$negative_emotional_state, na.rm = TRUE),
+    to = max(data_filt$negative_emotional_state, na.rm = TRUE),
+    by = 1
+  )) +
+  coord_cartesian(ylim = c(
+    min(data_filt$negative_emotional_state, na.rm = TRUE),
+    max(data_filt$negative_emotional_state, na.rm = TRUE)
+  ),
+  expand = TRUE,
+  default = TRUE) +
+  ggtitle("Émotions négatives") +
+  scale_x_date(breaks = "1 day", date_labels = "%b %e %a") +
+  labs(y = "(1-7)\n", x = "") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(colour = "#A6A6A6", angle = 90),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+grid.arrange(gg_stress,
+             gg_musc,
+             gg_acti,
+             gg_neg_emo,
+             ncol = 1) 
+```
+
+\newpage
+
+\raggedright
+
+* **Stress global** (ex: fatigué, éreinté, surchargé, épuisé physiquement)
+
+* **Stress musculaire** (ex: épuisement musculaire, fatigue musculaire, douleurs musculaires, raideurs musculaire)
+
+* **Manque d'activation** (ex: démotivé, paresseux, peu enthousiaste, en manque d'énergie)
+
+* **Émotions négatives** (ex: déprimé, stressé, ennuyé, colérique)
+
+**Phases**: Phases d’entraînement notées dans le questionnaire.  
+
+\justifying
+
+**Notes**:
+
+Short Recovery and Stress Scale (SRSS) [@Kolling2020-pc]
+
+Les échelles de notation du questionnaire (0-6) ont été transformées (1-7) pour permettre de visualiser graphiquement les notes de 0.
+
+Les bandes de couleur translucides (Valeurs normales (60 jours)) autour des lignes de tendance (Tendance (7 jours)) indiquent la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
+
+\newpage
+
+\center 
+
+### Analyse du sommeil
+
+```{r sommeil, fig.width=11, fig.height=13.25, fig.cap="Analyse des variations de sommeil (voir page suivante pour les détails)."}
+df_am_pm <- data_filt %>%
+  select(date, nom, bed_time, wake_up_time) %>%
+  na.omit() %>%
+  mutate(
+    date = as.Date(date, format = "%Y-%m-%d"),
+    # Ensure date column is in the correct format
+    bed_time_hm = format(as.POSIXct(bed_time, format = "%H:%M:%S"), "%H:%M"),
+    wake_up_time_hm = format(as.POSIXct(wake_up_time, format = "%H:%M:%S"), "%H:%M"),
+    bed_time_posix = as.POSIXct(strptime(bed_time, "%H:%M:%S")),
+    # Convert bed_time to POSIXct with specified format
+    wake_up_time_posix = as.POSIXct(strptime(wake_up_time, "%H:%M:%S")),
+    # Convert wake_up_time to POSIXct with specified format
+    bed_hour = as.numeric(format(bed_time_posix, "%H")),
+    # Extract hour from bed_time
+    wake_up_hour = as.numeric(format(wake_up_time_posix, "%H"))
+  ) |> 
+    na.omit() %>% # pour mercier bug avec 24:30:00 2024-02-25
+   mutate(
+    # substract 1 day if bed_time is before midnight and keep date if 0am to 12pm
+    graph_date_bed = if_else(bed_hour <= 12,
+                             as.Date("1970-10-20"),
+                             as.Date("1970-10-19")),
+    graph_date_wake = as.Date("1970-10-20"),
+    graph_dttm_bed = as.POSIXct(paste(graph_date_bed, bed_time)),
+    graph_dttm_wake = as.POSIXct(paste(graph_date_wake, wake_up_time))
+  ) |>
+  # for vjust on gg geom_text()
+  mutate(row_num = row_number())
+
+gg_sommeil <-
+  ggplot(data_filt %>% filter(!is.na(sleep_quality)), aes(date, weight = sleep_quality)) +
+  geom_rug(sides = "b", size = 6.5, aes(color = training_phase)) +
+  scale_color_manual(
+    name = "Phases:",
+    values = alpha(
+      c(
+        "Faible volume" = "#00FA9A",
+        "Surcharge" = "#FF6A6A",
+        "Compétition" = "black"
+      ),
+      .5
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (sleep_quality_ravg60 - sleep_quality_norm),
+    ymax = (sleep_quality_ravg60 + sleep_quality_norm),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  new_scale_color() +
+  geom_line(aes(y = sleep_quality_ravg7, color = "Tendance (7 jours)"), lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = c(
+      "Tendance (7 jours)" = "#69b3a2"
+    ),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "(1-11)\n", x = "") +
+  ggtitle("Qualité du sommeil") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_temps_sommeil <-
+  ggplot(data_filt %>% filter(!is.na(sleep_time)),
+         aes(date, weight = sleep_time, group = 1)) +
+  geom_bar(fill = "#E0EEEE", width = 0.5) +
+  geom_ribbon(aes(
+    ymin = (sleep_time_ravg60 - sleep_time_norm),
+    ymax = (sleep_time_ravg60 + sleep_time_norm),
+    fill = "Valeurs normales (60 jours)"
+  )) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("#00BFFF"), .2),
+    labels = "Valeurs normales (60 jours)",
+    drop = FALSE
+  ) +
+  geom_line(aes(y = sleep_time_ravg7, color = "Tendance (7 jours)"), lwd = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = "#69b3a2",
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(
+    from = min(round(data_filt$sleep_time, digits = 1), na.rm = TRUE),
+    to = max(round(data_filt$sleep_time, digits = 1), na.rm = TRUE),
+    by = 1
+  )) +
+  coord_cartesian(ylim = c
+                  (min(
+                    round(data_filt$sleep_time, digits = 1), na.rm = TRUE
+                  ),
+                    max(
+                      round(data_filt$sleep_time, digits = 1), na.rm = TRUE
+                    )),
+                  expand = TRUE,
+                  default = TRUE) +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "Heures (h)\n", x = "") +
+  ggtitle("Heures de sommeil") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 1),
+         fill = guide_legend(order = 2))
+
+gg_heure_couche <-
+  ggplot(df_am_pm, aes(x = date, y = graph_dttm_bed)) +
+  # zone de +- ~1 SD
+  geom_smooth(
+    level = 0.90, 
+    method = "loess",  # Use LOESS smoothing method
+    na.rm = TRUE,
+    aes(group = 1, fill = "Valeurs normales"),
+    color = "grey"
+  ) +
+  geom_line(aes(y = graph_dttm_bed,
+                color = "Jour"),
+            lwd = 1.5,
+            alpha = 0.6) +
+  geom_point(
+    aes(y = graph_dttm_bed),
+    size = 2.5,
+    color = alpha("#87CEFA", 0.8),
+    fill = "#F0FFFF",
+    shape = 21,
+    stroke = 2.5
+  ) +
+  geom_text(
+    aes(x = date, y = graph_dttm_bed, label = bed_time_hm),
+    color = "#2DA8FA",
+    vjust = ifelse(df_am_pm$row_num %% 2 == 0,-1.55, 2.55),
+    # Alternating vjust
+    hjust = 0.5,
+    # Center horizontally
+    size = 2.5,
+    fontface = "bold"
+  ) +
+  scale_color_manual(
+    name = "",
+    values = c("Jour" = "#87CEFA"),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("Valeurs normales" = "grey"), .2),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  #format the y axis so it looks like Time even though it is datetime
+  scale_y_datetime(
+    limits = c(round_date(
+      min(df_am_pm$graph_dttm_bed - 5400), "1 hours"
+    ),
+    round_date(
+      max(df_am_pm$graph_dttm_bed + 5400), "1 hours"
+    )),
+    expand = c(0, 0),
+    #turn off axis limit expansion
+    date_breaks = "1 hours",
+    #set custom axis breaks
+    date_labels = "%H:%M"
+  ) +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "Heure (h:m)\n", x = "") +
+  theme_minimal() +
+  ggtitle("Heure coucher") +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    plot.title = element_text(margin = margin(b = -10)),
+    legend.margin = margin(t = 0, unit = 'cm')
+  )
+
+gg_heure_leve <-
+  ggplot(df_am_pm, aes(x = date, y = graph_dttm_wake)) +
+  # zone de +- ~1 SD
+  geom_smooth(
+    level = 0.90,
+    na.rm = TRUE,
+    aes(group = 1, fill = "Valeurs normales"),
+    color = "grey"
+  ) +
+  geom_line(aes(y = graph_dttm_wake,
+                color = "Jour"),
+            lwd = 1.5,
+            alpha = 0.6) +
+  geom_point(
+    aes(y = graph_dttm_wake),
+    size = 2.5,
+    color = alpha("#87CEFA", 0.8),
+    fill = "#F0FFFF",
+    shape = 21,
+    stroke = 2.5
+  ) +
+  geom_text(
+    aes(x = date, y = graph_dttm_wake, label = wake_up_time_hm),
+    color = "#2DA8FA",
+    vjust = ifelse(df_am_pm$row_num %% 2 == 0,-1.55, 2.55),
+    # Alternating vjust
+    hjust = 0.5,
+    # Center horizontally
+    size = 2.5,
+    fontface = "bold"
+  ) +
+  scale_color_manual(
+    name = "",
+    values = c("Jour" = "#87CEFA"),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  scale_fill_manual(
+    name = "",
+    values = alpha(c("Valeurs normales" = "grey"), .2),
+    drop = FALSE,
+    na.translate = F
+  ) +
+  #format the y axis so it looks like Time even though it is datetime
+  scale_y_datetime(
+    #Set limits to show specific range
+    limits = c(round_date(
+      min(df_am_pm$graph_dttm_wake - 3600), "1 hours"
+    ),
+    round_date(
+      max(df_am_pm$graph_dttm_wake + 3600), "1 hours"
+    )),
+    expand = c(0, 0),
+    #turn off axis limit expansion
+    date_breaks = "1 hours",
+    #set custom axis breaks
+    date_labels = "%H:%M"
+  ) +
+  scale_x_date(breaks = "1 day", date_labels = "%a %d") +
+  labs(y = "Heure (h:m)\n", x = "") +
+  ggtitle("Heure lever") +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),    
+    plot.title = element_text(margin = margin(b = -10)),
+    legend.margin = margin(t = 0, unit = 'cm')
+  )
+
+gg_charge_sommeil <-
+  ggplot(data_filt %>% filter(!is.na(sleep_load_ravg7)),
+         aes(date, sleep_load_ravg7, group = 1)) +
+  geom_area(fill = "#87CEFA", alpha = 0.4) +
+  geom_line(aes(color = "Tendance (7 jours)"), size = 1.5) +
+  scale_color_manual(
+    name = "",
+    values = c("#87CEFA"),
+    labels = "Tendance (7 jours)",
+    drop = FALSE
+  ) +
+  geom_hline(
+    aes(yintercept = 40, linetype = "Minimum acceptable"),
+    color = "grey",
+    size = 1.5
+  ) +
+  scale_linetype_manual(
+    name = "",
+    values = c(2),
+    guide = guide_legend(override.aes = list(color = c("grey")))
+  ) +
+  scale_x_date(breaks = "1 day", date_labels = "%b %e %a") +
+  labs(y = "Charge (UA)\n", x = "") +
+  ggtitle("Charge de sommeil") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(colour = "#A6A6A6", angle = 90),
+    axis.title.y = element_text(colour = "#A6A6A6"),
+    axis.text.y = element_text(colour = "#A6A6A6"),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    legend.position = "top",
+    legend.margin = margin(t = 0, unit = 'cm')
+  ) +
+  guides(color = guide_legend(order = 2),
+         color = guide_legend(order = 1))
+
+graphs <- grid.arrange(
+  arrangeGrob(gg_sommeil, ncol = 1, nrow = 1),
+  arrangeGrob(gg_temps_sommeil, ncol = 1, nrow = 1),
+  arrangeGrob(gg_heure_couche, ncol = 1, nrow = 1),
+  arrangeGrob(gg_heure_leve, ncol = 1, nrow = 1),
+  arrangeGrob(gg_charge_sommeil, ncol = 1, nrow = 1),
+  heights = c(1.65, 1.5, 2.35, 2.35, 1.65)
+) 
+```
+
+\newpage
+
+\justifying
+
+**Qualité et heures de sommeil**: 
+
+Les bandes de couleur translucides (Valeurs normales (60 jours)) autour des lignes de tendance (Tendance (7 jours)) indiquent la variation normale (écart-type). Un changement est considéré comme important lorsque la ligne de tendance est à l'extérieur de la bande translucide [@Batterham2006-yp]. 
+
+**Heure coucher et lever**: 
+
+Les bandes grises translucides indiquent la variabilité considérée comme normale (écart-type). Vos heures de coucher et de lever sont considérées comme irrégulières lorsqu’elles sont à l'extérieur des bandes grises [@Batterham2006-yp]. Il est recommandé de maintenir un horaire de coucher et de lever le plus stable possible pour faciliter le processus de récupération. 
+
+**Charge de sommeil**: 
+
+Qualité de sommeil multipliée par les heures de sommeil. Le minimum acceptable est fixé à 40 unités arbitraires (UA), soit une qualité de sommeil de 6/11 et 8 heures de sommeil.
+
+**Phases**: Phases d’entraînement notées dans le questionnaire.  
+
+\newpage
+
+\center 
+
+### Potentiel de performance (% top WorldTour et ProTeam)
+
+```{r PP, fig.width=11, fig.height=10, fig.cap="Appréciation du potentiel de performance. Selon les données normatives WorldTour et ProTeam, les cyclistes en développement avec potentiel sont généralement >70\\% des meilleures élites et rarement >90\\%. L'estimation de la puissance critique (CP [FTP]) et du W’ est réalisée à partir des records de puissance de 2024 sur des durées de 3 minutes et 12 minutes."}
+if (ppr_filt$sexe == "Homme") {
+  
+# 68kg, 413CP, 6wkg, 42000w'
+PP_h <- tibble("1s" = 24.65,
+               "3m" = 9.5,
+               "12m" = 6.92,
+               "CP" = 6,
+               "W'" = 42000
+               ) %>%
+  pivot_longer(
+    cols = c("1s":"W'"),
+    names_to = "test",
+    values_to = "wkg_top"
+  ) %>%
+  mutate(temps = as.factor(test)) %>%
+  add_column("ath" = "top_pro") |> 
+  select(-temps) 
+
+PP_ath_h <- ppr_filt %>%
+  select(secs, this_season, poids_kg) %>%
+  filter(secs %in% c(1, 180, 720)) |>
+  mutate(wkg = this_season / poids_kg) |>
+  select(-poids_kg) |>
+  rename(test = secs,
+         w = this_season) |>
+  add_column("ath" = nom_yaml) |>
+  mutate(test = as.factor(test),
+         test = fct_recode(
+           test,
+           "1s" = "1",
+           "3m" = "180",
+           "12m" = "720"
+         )) |>
+  add_row(
+    test = "CP",
+    w = unique(ppr_filt$cp),
+    wkg = unique(ppr_filt$cp_wkg),
+    ath = nom_yaml
+  ) %>%
+  add_row(test = "W'",
+          wkg = unique(ppr_filt$w),
+          ath = nom_yaml)
+
+df_PP_comp_h <- left_join(PP_h, PP_ath_h, by = "test", suffix = c("_pro", "")) |> 
+  mutate(pourcentage_top_pro = round(wkg / wkg_top * 100),
+         wkg = round(wkg, digits = 1)) |>
+  mutate(test = factor(
+    test,
+    levels = c(
+      "1s",
+      "3m",
+      "12m",
+      "CP",
+      "W'"
+    )
+  ))
+
+gg_h <- df_PP_comp_h %>%
+  ggplot(aes(x = test, y = pourcentage_top_pro, weight = pourcentage_top_pro)) +
+  annotate(
+    "rect",
+    ymin = 0,
+    ymax = 60,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#FF6A6A",
+    alpha = 30 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 60,
+    ymax = 70,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#EEB422",
+    alpha = 30 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 70,
+    ymax = 80,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#00FA9A",
+    alpha = 30 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 80,
+    ymax = 90,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#069966",
+    alpha = 40 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 90,
+    ymax = 100,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#056141",
+    alpha = 50 / 100
+  ) +
+   geom_linerange(aes(x = test, ymin = 0, ymax = pourcentage_top_pro),
+                 color = "#8C8C8C",
+                 size = 5) +
+  geom_point(
+    size = 21,
+    color = "#8C8C8C",
+    fill = "grey",
+    shape = 21,
+    stroke = 6
+  ) +
+  geom_text(
+    aes(
+      x = test,
+      y = pourcentage_top_pro,
+      label = paste0(pourcentage_top_pro, "%")
+    ),
+    position = position_dodge(width = 0.9),
+    color = "black",
+    fontface = "bold",
+    size = 7,
+    vjust = 0.5
+  ) +
+  geom_text(
+    data = filter(df_PP_comp_h, test == "W'"),
+    aes(x = test, y = -3, label = paste0(wkg,  " (Joules)")),
+    color = "black",
+    size = 6
+  ) +
+  geom_text(
+    data = filter(df_PP_comp_h, test != "W'"),
+    aes(x = test, y = -3, label = paste0(wkg, " (W/kg)")),
+    color = "black",
+    size = 6
+  ) +
+    geom_text(
+       data = filter(df_PP_comp_h, test != "W'"),
+    aes(x = test, y = -8, label = paste0(w, " (W)")),
+    color = "#A6A6A6",
+    size = 6
+  ) +
+  scale_y_continuous(
+    breaks = seq(from = 55, to = 95, by = 10),
+    labels = c(
+      "À développer (<60%)",
+      "Potentiel (60-70%)",
+      "Haut potentiel (70-80%)",
+      "Exceptionnel (80-90%)",
+      "Classe mondiale (>90%)"
+    )
+  ) +
+  labs(y = "", x = "") +
+  ggtitle("Profil de puissance (2024) vs élite mondiale (hommes)") +
+  theme_minimal() +
+  theme(
+     plot.title = element_text(
+      hjust = 0,
+      vjust = -2,
+      size = 16,
+      face = "bold",
+      colour = "#A6A6A6"
+    ),
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(
+      colour = "#A6A6A6",
+      face = "bold",
+      size = 14
+    ),
+    axis.text.y = element_text(
+      colour = "#A6A6A6",
+      face = "bold",
+      size = 14
+    ),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.line.x = element_line(colour = "#A6A6A6", size = 0.5),
+  )
+
+gg_h
+
+} else if (ppr_filt$sexe == "Femme") {
+
+# 55kg, 288CP, 5.2wkg, 26880w'
+PP_f <- tibble("1s" = 18.50,
+               "3m" = 7.95,
+               "12m" = 5.9,
+               "CP" = 5.2,
+               "W'" = 26880
+               ) %>%
+  pivot_longer(
+    cols = c("1s":"W'"),
+    names_to = "test",
+    values_to = "wkg_top"
+  ) %>%
+  mutate(temps = as.factor(test)) %>%
+  add_column("ath" = "top_pro") |> 
+  select(-temps)
+
+PP_ath_f <- ppr_filt %>%
+  select(secs, this_season, poids_kg) %>%
+  filter(secs %in% c(1, 180, 720)) |>
+  mutate(wkg = this_season / poids_kg) |>
+  select(-poids_kg) |>
+  rename(test = secs,
+         w = this_season) |>   
+  add_column("ath" = nom_yaml) |> 
+  mutate(
+    test = as.factor(test),
+    test = fct_recode(
+      test,
+      "1s" = "1",
+      "3m" = "180",
+      "12m" = "720"
+    )
+  ) |> 
+  add_row(test = "CP", w = unique(ppr_filt$cp), wkg = unique(ppr_filt$cp_wkg), ath = nom_yaml) %>%
+  add_row(test = "W'", wkg = unique(ppr_filt$w), ath = nom_yaml)
+
+df_PP_comp_f <- left_join(PP_f, PP_ath_f, by = "test", suffix = c("_pro", "")) |> 
+  mutate(pourcentage_top_pro = round(wkg / wkg_top * 100),
+         wkg = round(wkg, digits = 1)) |>
+  mutate(test = factor(
+    test,
+    levels = c(
+      "1s",
+      "3m",
+      "12m",
+      "CP",
+      "W'"
+    )
+  ))
+
+gg_f <- df_PP_comp_f %>%
+   ggplot(aes(x = test, y = pourcentage_top_pro, weight = pourcentage_top_pro)) +
+  annotate(
+    "rect",
+    ymin = 0,
+    ymax = 60,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#FF6A6A",
+    alpha = 30 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 60,
+    ymax = 70,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#EEB422",
+    alpha = 30 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 70,
+    ymax = 80,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#00FA9A",
+    alpha = 30 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 80,
+    ymax = 90,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#069966",
+    alpha = 40 / 100
+  ) +
+  annotate(
+    "rect",
+    ymin = 90,
+    ymax = 100,
+    xmin = -Inf,
+    xmax = Inf,
+    fill = "#056141",
+    alpha = 50 / 100
+  ) +
+   geom_linerange(aes(x = test, ymin = 0, ymax = pourcentage_top_pro),
+                 color = "#8C8C8C",
+                 size = 5) +
+  geom_point(
+    size = 21,
+    color = "#8C8C8C",
+    fill = "grey",
+    shape = 21,
+    stroke = 6
+  ) +
+  geom_text(
+    aes(
+      x = test,
+      y = pourcentage_top_pro,
+      label = paste0(pourcentage_top_pro, "%")
+    ),
+    position = position_dodge(width = 0.9),
+    color = "black",
+    fontface = "bold",
+    size = 7,
+    vjust = 0.5
+  ) +
+  geom_text(
+    data = filter(df_PP_comp_f, test == "W'"),
+    aes(x = test, y = -3, label = paste0(wkg,  " (Joules)")),
+    color = "black",
+    size = 6
+  ) +
+  geom_text(
+    data = filter(df_PP_comp_f, test != "W'"),
+    aes(x = test, y = -3, label = paste0(wkg, " (W/kg)")),
+    color = "black",
+    size = 6
+  ) +
+    geom_text(
+       data = filter(df_PP_comp_f, test != "W'"),
+    aes(x = test, y = -8, label = paste0(w, " (W)")),
+    color = "#A6A6A6",
+    size = 6
+  ) +
+  scale_y_continuous(
+    breaks = seq(from = 55, to = 95, by = 10),
+    labels = c(
+      "À développer (<60%)",
+      "Potentiel (60-70%)",
+      "Haut potentiel (70-80%)",
+      "Exceptionnel (80-90%)",
+      "Classe mondiale (>90%)"
+    )
+  ) +
+  labs(y = "", x = "") +
+  ggtitle("Profil de puissance (2024) vs élite mondiale (femmes)") +
+  theme_minimal() +
+  theme(
+     plot.title = element_text(
+      hjust = 0,
+      vjust = -2,
+      size = 16,
+      face = "bold",
+      colour = "#A6A6A6"
+    ),
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(
+      colour = "#A6A6A6",
+      face = "bold",
+      size = 14
+    ),
+    axis.text.y = element_text(
+      colour = "#A6A6A6",
+      face = "bold",
+      size = 14
+    ),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    axis.line.x = element_line(colour = "#A6A6A6", size = 0.5),
+  )
+
+gg_f
+}
+```
+
+\justifying
+
+**Références**: [@Valenzuela2022-qz] et [@Mateo-March2022-ln]
+
+\newpage
+
+\raggedright
+
+### Références
+
+\vspace{12pt}
