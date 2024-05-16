@@ -5,6 +5,7 @@ dev: cairo_pdf
 df_print: paged
 output:
   pdf_document:
+    keep_tex: false
     latex_engine: xelatex
 bibliography: /Users/julescusson-fradet/Library/CloudStorage/GoogleDrive-jules.cusson.fradet@gmail.com/Mon disque/paperpile.bib
 csl: apa-6th-edition.csl
@@ -13,10 +14,12 @@ params:
    selection_debut: params$selection_debut
    selection_fin: params$selection_fin
 # params:
-#    athlete_selected: "Georg Nikodym"
-#    selection_debut: "2024-03-07"
-#    selection_fin: "2024-04-03"
+   # athlete_selected: "Tamara Kroll"
+   # selection_debut: "2024-04-04"
+   # selection_fin: "2024-05-01"
 header-includes:
+- \usepackage{geometry}
+- \geometry{left=0.45in, right=0.45in, top=0.65in, bottom=0.50in} # Adjust margins as needed
 - \usepackage{makecell}
 - \usepackage{booktabs}
 - \usepackage{colortbl}
@@ -25,8 +28,7 @@ header-includes:
 - \usepackage{fancyhdr}
 - \usepackage{float}
 - \pagestyle{fancy}
-- \addtolength{\headheight}{1.0cm}
-- \rhead{\includegraphics[height=1.2cm]{a-ltips.png}}
+- \rhead{\includegraphics[height=1cm]{a-ltips.png}}
 - \renewcommand{\headrulewidth}{0pt}
 - \fancyfoot[C]{\thepage}
 - \usepackage[maxfloats=256]{morefloats}
@@ -159,6 +161,12 @@ date: `r nom_yaml`
 \vspace{12pt}
 \vspace{12pt}
 \vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
+\vspace{12pt}
 
 \center 
 
@@ -256,11 +264,11 @@ percentage_responses <- full_df %>%
 
 \newpage
 
-\center 
+\vspace*{-2.25cm}
 
 ### Charge d'entraînement multisport et mesures descriptives
 
-```{r globale, fig.width=11, fig.height=13.25,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives (voir page suivante pour les détails)."}
+```{r globale, fig.width=11, fig.height=13.5,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives (voir page suivante pour les détails)."}
 #charge
 gg1 <- ggplot(data_filt %>% filter(!is.na(load_rpe)), aes(date, weight = load_rpe / 1000)) +
   geom_rug(sides = "b", size = 4.5, aes(color = training_phase)) +
@@ -344,13 +352,15 @@ gg2 <-
   guides(fill = guide_legend(reverse = TRUE)) +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
     axis.text.x = element_blank(),
     axis.text.y = element_text(colour = "#A6A6A6"),
     axis.title.y = element_text(colour = "#A6A6A6"),
-    panel.grid.minor.x = element_blank()
+    panel.grid.minor.x = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
   )
 
 #fraîcheur
@@ -387,13 +397,15 @@ gg3 <-
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
     axis.text.x = element_blank(),
     axis.text.y = element_text(colour = "#A6A6A6"),
     axis.title.y = element_text(colour = "#A6A6A6"),
-    panel.grid.minor.x = element_blank()
+    panel.grid.minor.x = element_blank(),
+    legend.margin = margin(t = 0, unit = 'cm')
   )
 
 #monotonie
@@ -474,7 +486,7 @@ Fait référence à la similitude de l’entraînement dans les 7 derniers jours
 
 \newpage
 
-\center
+\vspace*{-2.25cm}
 
 ### État d'entraînement
 
@@ -641,6 +653,7 @@ df_j_lutrimp_rpe_ravg <- data_filt %>%
     theme_minimal() +
     theme(
       legend.position = "top",
+      plot.title = element_text(margin = margin(b = -10)),
       legend.title = element_blank(),
       axis.ticks.y = element_blank(),
       axis.title.x = element_blank(),
@@ -893,11 +906,11 @@ Relation entre la puissance et la fréquence cardiaque. Intuitivement, une fréq
 
 \newpage
 
-\center 
+\vspace*{-2.25cm}
 
 ### État de récupération
 
-```{r recup, fig.width=11, fig.height=13.25, fig.cap="Analyse des variations de l'état de récupération (voir page suivante pour les détails)."}
+```{r recup, fig.width=11, fig.height=13.5, fig.cap="Analyse des variations de l'état de récupération (voir page suivante pour les détails)."}
 gg_recup <- ggplot(data_filt %>% filter(!is.na(overall_recovery)),
        aes(date, weight = overall_recovery)) +
   geom_rug(sides = "b", size = 6.5, aes(color = training_phase)) +
@@ -981,23 +994,24 @@ gg_phys <-
     labels = "Tendance (7 jours)",
     drop = FALSE
   ) +
-  scale_y_continuous(breaks = seq(
-    from = min(data_filt$physical_performance_capability, na.rm = TRUE),
-    to = max(data_filt$physical_performance_capability, na.rm = TRUE),
-    by = 1
-  )) +
-  coord_cartesian(ylim = c(
-    min(data_filt$physical_performance_capability, na.rm = TRUE),
-    max(data_filt$physical_performance_capability, na.rm = TRUE)
-  ),
-  expand = TRUE,
-  default = TRUE) +
+  # scale_y_continuous(breaks = seq(
+  #   from = min(data_filt$physical_performance_capability, na.rm = TRUE),
+  #   to = max(data_filt$physical_performance_capability, na.rm = TRUE),
+  #   by = 1
+  # )) +
+  # coord_cartesian(ylim = c(
+  #   min(data_filt$physical_performance_capability, na.rm = TRUE),
+  #   max(data_filt$physical_performance_capability, na.rm = TRUE)
+  # ),
+  # expand = TRUE,
+  # default = TRUE) +
   ggtitle("Capacité physique") +
   scale_x_date(breaks = "1 day", date_labels = "%a %d") +
   labs(y = "(1-7)\n", x = "") +
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
@@ -1038,23 +1052,24 @@ gg_mental <-
     labels = "Tendance (7 jours)",
     drop = FALSE
   ) +
-  scale_y_continuous(breaks = seq(
-    from = min(data_filt$mental_performance_capability, na.rm = TRUE),
-    to = max(data_filt$mental_performance_capability, na.rm = TRUE),
-    by = 1
-  )) +
-  coord_cartesian(ylim = c(
-    min(data_filt$mental_performance_capability, na.rm = TRUE),
-    max(data_filt$mental_performance_capability, na.rm = TRUE)
-  ),
-  expand = TRUE,
-  default = TRUE) +
+  # scale_y_continuous(breaks = seq(
+  #   from = min(data_filt$mental_performance_capability, na.rm = TRUE),
+  #   to = max(data_filt$mental_performance_capability, na.rm = TRUE),
+  #   by = 1
+  # )) +
+  # coord_cartesian(ylim = c(
+  #   min(data_filt$mental_performance_capability, na.rm = TRUE),
+  #   max(data_filt$mental_performance_capability, na.rm = TRUE)
+  # ),
+  # expand = TRUE,
+  # default = TRUE) +
   ggtitle("Capacité mentale") +
   scale_x_date(breaks = "1 day", date_labels = "%a %d") +
   labs(y = "(1-7)\n", x = "") +
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
@@ -1091,23 +1106,24 @@ gg_bal_emo <-
     labels = "Tendance (7 jours)",
     drop = FALSE
   ) +
-  scale_y_continuous(breaks = seq(
-    from = min(data_filt$emotional_balance, na.rm = TRUE),
-    to = max(data_filt$emotional_balance, na.rm = TRUE),
-    by = 1
-  )) +
-  coord_cartesian(ylim = c(
-    min(data_filt$emotional_balance, na.rm = TRUE),
-    max(data_filt$emotional_balance, na.rm = TRUE)
-  ),
-  expand = TRUE,
-  default = TRUE) +
+  # scale_y_continuous(breaks = seq(
+  #   from = min(data_filt$emotional_balance, na.rm = TRUE),
+  #   to = max(data_filt$emotional_balance, na.rm = TRUE),
+  #   by = 1
+  # )) +
+  # coord_cartesian(ylim = c(
+  #   min(data_filt$emotional_balance, na.rm = TRUE),
+  #   max(data_filt$emotional_balance, na.rm = TRUE)
+  # ),
+  # expand = TRUE,
+  # default = TRUE) +
   ggtitle("Balance émotionnelle") +
   scale_x_date(breaks = "1 day", date_labels = "%b %e %a") +
   labs(y = "(1-7)\n", x = "") +
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
@@ -1153,11 +1169,11 @@ Les bandes de couleur translucides (Valeurs normales (60 jours)) autour des lign
 
 \newpage
 
-\center 
+\vspace*{-2.25cm}
 
 ### État de stress
 
-```{r stress, fig.width=11, fig.height=13.25, fig.cap="Analyse des variations de l'état de stress (voir page suivante pour les détails)."}
+```{r stress, fig.width=11, fig.height=13.5, fig.cap="Analyse des variations de l'état de stress (voir page suivante pour les détails)."}
 gg_stress <-
   ggplot(data_filt %>% filter(!is.na(overall_stress)),
          aes(date, weight = overall_stress)) +
@@ -1235,23 +1251,24 @@ gg_musc <-
     labels = "Tendance (7 jours)",
     drop = FALSE
   ) +
-  scale_y_continuous(breaks = seq(
-    from = min(data_filt$muscular_stress, na.rm = TRUE),
-    to = max(data_filt$muscular_stress, na.rm = TRUE),
-    by = 1
-  )) +
-  coord_cartesian(ylim = c(
-    min(data_filt$muscular_stress, na.rm = TRUE),
-    max(data_filt$muscular_stress, na.rm = TRUE)
-  ),
-  expand = TRUE,
-  default = TRUE) +
+  # scale_y_continuous(breaks = seq(
+  #   from = min(data_filt$muscular_stress, na.rm = TRUE),
+  #   to = max(data_filt$muscular_stress, na.rm = TRUE),
+  #   by = 1
+  # )) +
+  # coord_cartesian(ylim = c(
+  #   min(data_filt$muscular_stress, na.rm = TRUE),
+  #   max(data_filt$muscular_stress, na.rm = TRUE)
+  # ),
+  # expand = TRUE,
+  # default = TRUE) +
   ggtitle("Stress musculaire") +
   scale_x_date(breaks = "1 day", date_labels = "%a %d") +
   labs(y = "(1-7)\n", x = "") +
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
@@ -1288,23 +1305,24 @@ gg_acti <-
     labels = "Tendance (7 jours)",
     drop = FALSE
   ) +
-  scale_y_continuous(breaks = seq(
-    from = min(data_filt$lack_of_activation, na.rm = TRUE),
-    to = max(data_filt$lack_of_activation, na.rm = TRUE),
-    by = 1
-  )) +
-  coord_cartesian(ylim = c(
-    min(data_filt$lack_of_activation, na.rm = TRUE),
-    max(data_filt$lack_of_activation, na.rm = TRUE)
-  ),
-  expand = TRUE,
-  default = TRUE) +
+  # scale_y_continuous(breaks = seq(
+  #   from = min(data_filt$lack_of_activation, na.rm = TRUE),
+  #   to = max(data_filt$lack_of_activation, na.rm = TRUE),
+  #   by = 1
+  # )) +
+  # coord_cartesian(ylim = c(
+  #   min(data_filt$lack_of_activation, na.rm = TRUE),
+  #   max(data_filt$lack_of_activation, na.rm = TRUE)
+  # ),
+  # expand = TRUE,
+  # default = TRUE) +
   ggtitle("Manque d'activation") +
   scale_x_date(breaks = "1 day", date_labels = "%a %d") +
   labs(y = "(1-7)\n", x = "") +
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
@@ -1345,23 +1363,24 @@ gg_neg_emo <-
     labels = "Tendance (7 jours)",
     drop = FALSE
   ) +
-  scale_y_continuous(breaks = seq(
-    from = min(data_filt$negative_emotional_state, na.rm = TRUE),
-    to = max(data_filt$negative_emotional_state, na.rm = TRUE),
-    by = 1
-  )) +
-  coord_cartesian(ylim = c(
-    min(data_filt$negative_emotional_state, na.rm = TRUE),
-    max(data_filt$negative_emotional_state, na.rm = TRUE)
-  ),
-  expand = TRUE,
-  default = TRUE) +
+  # scale_y_continuous(breaks = seq(
+  #   from = min(data_filt$negative_emotional_state, na.rm = TRUE),
+  #   to = max(data_filt$negative_emotional_state, na.rm = TRUE),
+  #   by = 1
+  # )) +
+  # coord_cartesian(ylim = c(
+  #   min(data_filt$negative_emotional_state, na.rm = TRUE),
+  #   max(data_filt$negative_emotional_state, na.rm = TRUE)
+  # ),
+  # expand = TRUE,
+  # default = TRUE) +
   ggtitle("Émotions négatives") +
   scale_x_date(breaks = "1 day", date_labels = "%b %e %a") +
   labs(y = "(1-7)\n", x = "") +
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
@@ -1408,7 +1427,7 @@ Les bandes de couleur translucides (Valeurs normales (60 jours)) autour des lign
 
 \newpage
 
-\center 
+\vspace*{-2.25cm}
 
 ### Analyse du sommeil
 
@@ -1458,6 +1477,11 @@ gg_sommeil <-
     drop = FALSE,
     na.translate = F
   ) +
+  geom_hline(yintercept = mean(data_filt$sleep_quality, na.rm = TRUE), 
+             linetype = "dotted",  # Specify linetype directly
+             color = "grey",
+             size = 1.5
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (sleep_quality_ravg60 - sleep_quality_norm),
@@ -1492,10 +1516,34 @@ gg_sommeil <-
     axis.text.y = element_text(colour = "#A6A6A6"),
     axis.title.y = element_text(colour = "#A6A6A6"),
     panel.grid.minor.x = element_blank(),
-    legend.margin = margin(t = 0, unit = 'cm')
+    legend.margin = margin(t = 0, unit = 'cm'),
+    plot.margin = margin(0.10, 1.75, 0.10, 0.10, "cm")  # Adjusting plot margins to create space for the annotation outside the plot area
   ) +
   guides(color = guide_legend(order = 1),
-         fill = guide_legend(order = 2))
+         fill = guide_legend(order = 2)) +
+  annotate(
+    "text",
+    x = max(df_am_pm$date),
+    y = round(mean(data_filt$sleep_quality, na.rm = TRUE), digits = 2),
+    label = paste0(round(mean(data_filt$sleep_quality, na.rm = TRUE), digits = 2)),
+    color = "black",
+    hjust = -1.5,
+    vjust = 0,
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotate(
+  "text",
+  x = max(df_am_pm$date),
+  y = round(mean(data_filt$sleep_quality, na.rm = TRUE), digits = 2),
+  label = "Moy",
+  color = "grey",
+  hjust = -1.5,
+  vjust = 1.5,
+  size = 5,
+  fontface = "bold"
+  ) +
+  coord_cartesian(clip = "off") 
 
 gg_temps_sommeil <-
   ggplot(data_filt %>% filter(!is.na(sleep_time)),
@@ -1512,6 +1560,11 @@ gg_temps_sommeil <-
     labels = "Valeurs normales (60 jours)",
     drop = FALSE
   ) +
+  geom_hline(yintercept = round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 1),
+             linetype = "dotted",  # Specify linetype directly
+             color = "grey",
+             size = 1.5
+  ) +
   geom_line(aes(y = sleep_time_ravg7, color = "Tendance (7 jours)"), lwd = 1.5) +
   scale_color_manual(
     name = "",
@@ -1519,26 +1572,13 @@ gg_temps_sommeil <-
     labels = "Tendance (7 jours)",
     drop = FALSE
   ) +
-  scale_y_continuous(breaks = seq(
-    from = min(round(data_filt$sleep_time, digits = 1), na.rm = TRUE),
-    to = max(round(data_filt$sleep_time, digits = 1), na.rm = TRUE),
-    by = 1
-  )) +
-  coord_cartesian(ylim = c
-                  (min(
-                    round(data_filt$sleep_time, digits = 1), na.rm = TRUE
-                  ),
-                    max(
-                      round(data_filt$sleep_time, digits = 1), na.rm = TRUE
-                    )),
-                  expand = TRUE,
-                  default = TRUE) +
   scale_x_date(breaks = "1 day", date_labels = "%a %d") +
   labs(y = "Heures (h)\n", x = "") +
   ggtitle("Heures de sommeil") +
   theme_minimal() +
   theme(
     legend.position = "top",
+    plot.title = element_text(margin = margin(b = -10)),
     legend.title = element_blank(),
     axis.ticks.y = element_blank(),
     axis.title.x = element_blank(),
@@ -1547,13 +1587,42 @@ gg_temps_sommeil <-
     axis.title.y = element_text(colour = "#A6A6A6"),
     panel.grid.minor.x = element_blank(),
     panel.grid.minor.y = element_blank(),
-    legend.margin = margin(t = 0, unit = 'cm')
+    legend.margin = margin(t = 0, unit = 'cm'),
+    plot.margin = margin(0.10, 1.75, 0.10, 0.10, "cm")  # Adjusting plot margins to create space for the annotation outside the plot area
   ) +
   guides(color = guide_legend(order = 1),
-         fill = guide_legend(order = 2))
+         fill = guide_legend(order = 2)) +
+  annotate(
+    "text",
+    x = max(df_am_pm$date),
+    y = round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 1),
+    label = paste0(round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 2)),
+    color = "black",
+    hjust = -1.5,
+    vjust = 0,
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotate(
+  "text",
+  x = max(df_am_pm$date),
+  y =  round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 1),
+  label = "Moy",
+  color = "grey",
+  hjust = -1.5,
+  vjust = 1.5,
+  size = 5,
+  fontface = "bold"
+  ) +
+  coord_cartesian(clip = "off")
 
 gg_heure_couche <-
   ggplot(df_am_pm, aes(x = date, y = graph_dttm_bed)) +
+   geom_hline(yintercept = mean(df_am_pm$graph_dttm_bed),
+             linetype = "dotted",  # Specify linetype directly
+             color = "grey",
+             size = 1.5
+  ) +
   # zone de +- ~1 SD
   geom_smooth(
     level = 0.90, 
@@ -1623,12 +1692,42 @@ gg_heure_couche <-
     axis.text.y = element_text(colour = "#A6A6A6"),
     axis.title.y = element_text(colour = "#A6A6A6"),
     panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),    
     plot.title = element_text(margin = margin(b = -10)),
-    legend.margin = margin(t = 0, unit = 'cm')
-  )
+    legend.margin = margin(t = 0, unit = 'cm'),
+    plot.margin = margin(0.10, 1.75, 0.10, 0.10, "cm")  
+  ) +
+  annotate(
+    "text",
+    x = max(as.Date(df_am_pm$date, format = "%Y-%m-%d") -0.55),
+    y = mean(df_am_pm$graph_dttm_bed),
+    label = format(mean(df_am_pm$graph_dttm_bed), "%H:%M"),
+    color = "black",
+    hjust = -1.5,
+    vjust = 0,
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotate(
+  "text",
+  x = max(as.Date(df_am_pm$date, format = "%Y-%m-%d")),
+  y = mean(df_am_pm$graph_dttm_bed),
+  label = "Moy",
+  color = "grey",
+  hjust = -1.5,
+  vjust = 1.5,
+  size = 5,
+  fontface = "bold"
+  ) +
+  coord_cartesian(clip = "off")
 
 gg_heure_leve <-
   ggplot(df_am_pm, aes(x = date, y = graph_dttm_wake)) +
+  geom_hline(yintercept = mean(df_am_pm$graph_dttm_wake),
+             linetype = "dotted",  # Specify linetype directly
+             color = "grey",
+             size = 1.5
+  ) +
   # zone de +- ~1 SD
   geom_smooth(
     level = 0.90,
@@ -1698,9 +1797,34 @@ gg_heure_leve <-
     axis.text.y = element_text(colour = "#A6A6A6"),
     axis.title.y = element_text(colour = "#A6A6A6"),
     panel.grid.minor.x = element_blank(),    
+    panel.grid.minor.y = element_blank(),    
     plot.title = element_text(margin = margin(b = -10)),
-    legend.margin = margin(t = 0, unit = 'cm')
-  )
+    legend.margin = margin(t = 0, unit = 'cm'),
+    plot.margin = margin(0.10, 1.75, 0.10, 0.10, "cm")  
+  ) +
+  annotate(
+    "text",
+    x = max(as.Date(df_am_pm$date, format = "%Y-%m-%d") -0.55),
+    y = mean(df_am_pm$graph_dttm_wake),
+    label = format(mean(df_am_pm$graph_dttm_wake), "%H:%M"),
+    color = "black",
+    hjust = -1.5,
+    vjust = 0,
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotate(
+  "text",
+  x = max(as.Date(df_am_pm$date, format = "%Y-%m-%d")),
+  y = mean(df_am_pm$graph_dttm_wake),
+  label = "Moy",
+  color = "grey",
+  hjust = -1.5,
+  vjust = 1.5,
+  size = 5,
+  fontface = "bold"
+  ) +
+  coord_cartesian(clip = "off")
 
 gg_charge_sommeil <-
   ggplot(data_filt %>% filter(!is.na(sleep_load_ravg7)),
@@ -1712,6 +1836,11 @@ gg_charge_sommeil <-
     values = c("#87CEFA"),
     labels = "Tendance (7 jours)",
     drop = FALSE
+  ) +
+  geom_hline(yintercept = mean(data_filt$sleep_load, na.rm = TRUE), 
+             linetype = "dotted",  # Specify linetype directly
+             color = "grey",
+             size = 1.5
   ) +
   geom_hline(
     aes(yintercept = 40, linetype = "Minimum acceptable"),
@@ -1735,10 +1864,35 @@ gg_charge_sommeil <-
     panel.grid.minor.x = element_blank(),
     panel.grid.minor.y = element_blank(),
     legend.position = "top",
-    legend.margin = margin(t = 0, unit = 'cm')
+    plot.title = element_text(margin = margin(b = -10)),
+    legend.margin = margin(t = 0, unit = 'cm'),
+    plot.margin = margin(0.10, 1.75, 0.10, 0.10, "cm")
   ) +
   guides(color = guide_legend(order = 2),
-         color = guide_legend(order = 1))
+         color = guide_legend(order = 1)) +
+  annotate(
+    "text",
+    x = max(df_am_pm$date),
+    y =  as.numeric(format(round(mean(data_filt$sleep_load, na.rm = TRUE), digits = 1), nsmall = 1)),
+    label = paste0(format(round(mean(data_filt$sleep_load, na.rm = TRUE), digits = 1), nsmall = 1)),
+    color = "black",
+    hjust = -1.5,
+    vjust = 0,
+    size = 5,
+    fontface = "bold"
+  ) +
+  annotate(
+  "text",
+  x = max(df_am_pm$date),
+  y = mean(data_filt$sleep_load, na.rm = TRUE),
+  label = "Moy",
+  color = "grey",
+  hjust = -1.5,
+  vjust = 1.5,
+  size = 5,
+  fontface = "bold"
+  ) +
+  coord_cartesian(clip = "off") 
 
 graphs <- grid.arrange(
   arrangeGrob(gg_sommeil, ncol = 1, nrow = 1),
@@ -1746,7 +1900,7 @@ graphs <- grid.arrange(
   arrangeGrob(gg_heure_couche, ncol = 1, nrow = 1),
   arrangeGrob(gg_heure_leve, ncol = 1, nrow = 1),
   arrangeGrob(gg_charge_sommeil, ncol = 1, nrow = 1),
-  heights = c(1.65, 1.5, 2.35, 2.35, 1.65)
+  heights = c(1.65, 1.65, 2.30, 2.30, 1.60)
 ) 
 ```
 
@@ -1770,7 +1924,7 @@ Qualité de sommeil multipliée par les heures de sommeil. Le minimum acceptable
 
 \newpage
 
-\center 
+\vspace*{-2.25cm}
 
 ### Potentiel de performance (% top WorldTour et ProTeam)
 

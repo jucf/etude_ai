@@ -49,9 +49,9 @@ hist <- read_sheet_clean(hist_url, "Réponses au formulaire 1") |>
          age = as.numeric(difftime(Sys.Date(), date_de_naissance, units = "days")) / 365.25)
 
 info <- read_sheet_clean(ss_url, "info") |>
-  select(-c(virement, lien_forms:code_forms)) |>
+  select(-c(virement, lien_forms:max_number_6)) |>
   unite(nom, prenom, nom, sep = " ", remove = TRUE) |>
-  mutate(ath_id = unlist(ath_id))
+  mutate(ath_id = unlist(ath_id)) 
 
 srss <- read_sheet_clean(ss_url, "srss") |>
   rename("courriel" = "adresse_courriel")
@@ -122,9 +122,16 @@ athletes_activities <-
 # Group the df in the list into a single df and merge it with the 'info' df
 athletes_power_df <-
   rbindlist(athletes_power, fill=TRUE) |>
-  
-    janitor::clean_names()
+  janitor::clean_names()
+
 athletes_power_clean <- left_join(athletes_power_df, info, by = "ath_id")
+
+# add weight to df to calculate w/kg
+weight_df <- hist |> 
+  rename(courriel = adresse_de_courriel) |> 
+  select(courriel, sexe, poids_kg)
+
+athletes_power_clean <- left_join(athletes_power_clean, weight_df, by = "courriel") 
 
 athletes_wellness_df <-
   rbindlist(athletes_wellness, fill = TRUE)
@@ -141,7 +148,8 @@ athletes_wellness_clean <- athletes_wellness_df |>
     athletes_wellness_df |>
       select(-hrv, -restingHR),
     by = c("date", "ath_id")
-  )
+  ) |>
+ arrange(date) 
   
 athletes_activities_df <- rbindlist(athletes_activities)
 athletes_activities_df <- left_join(athletes_activities_df, info, by = "ath_id")
@@ -235,18 +243,21 @@ athletes_activities_clean <- left_join(result, info, by = c("ath_id")) |>
 ```
 
 ```{r clean data srss}
-# alainst_louis@hotmail.com couche parfois en am 
+# Merge the datasets
 srss_clean <- merge(srss, info, by = "courriel") |>
-  # correct date for euro subjects
+  # Correct date for European subjects
   mutate(
+    # Convert horodatage to DateTime with time zone
     horodatage = if_else(
       courriel %in% c("tam.kroll@gmail.com", "jerome@bicyclettelab.com"),
       with_tz(as_datetime(as.numeric(horodatage), origin = "1970-01-01"), tz = "Europe/Paris"),
-      as_datetime(as.numeric(horodatage), origin = "1970-01-01")
+      # Set time zone to "UTC" for non-selected rows
+      force_tz(as_datetime(as.numeric(horodatage), origin = "1970-01-01"), tzone = "UTC")
     ),
-    # keep only date part of horodaatge to prevent conversion day for euro subjects
+    # Keep only the date part of horodatage to prevent conversion day for European subjects
     date = as.Date(substr(horodatage, 1, 10))
   ) |>
+  ungroup() |>
   rename(
     missed_form_date = date_formulaire_manque_uniquement,
     sleep_quality = quelle_etait_la_qualite_de_votre_sommeil_la_nuit_derniere,
@@ -277,10 +288,10 @@ srss_clean <- merge(srss, info, by = "courriel") |>
   ) |>
   # recode srss vars 0-6 to 1-7 to eliminate na if 0
   mutate_at(.vars = 4:11,
-            .funs = list( ~ recode(.,!!!setNames(1:7, 0:6)))) |>
+            .funs = list(~ recode(., !!!setNames(1:7, 0:6)))) |>
   # recode sleep_quality vars 0-10 to 1-11 to eliminate na if 0
   mutate_at(.vars = 12,
-            .funs = list( ~ recode(.,!!!setNames(1:11, 0:10)))) |>
+            .funs = list(~ recode(., !!!setNames(1:11, 0:10)))) |>
   # recode feel training vars -5 - +5 to 1-11
   mutate(across(c(22, 27, 32, 37), ~ parse_number(.))) |>
   mutate_at(
@@ -310,15 +321,21 @@ srss_clean <- merge(srss, info, by = "courriel") |>
         bed_time >= 6 * 60 * 60 &
           bed_time <= 18 * 60 * 60 &
           courriel != "alainst_louis@hotmail.com",
-        bed_time + 12 * 60 * 60,
-        bed_time
-      ),
+      bed_time + 12 * 60 * 60,
+      bed_time
+    ),
     # Convert bed_time to hms format
     bed_time = as_hms(bed_time),
+    
+    # Adjust wake_up_time to 24-hour format if it's 18h instead of 6h
+
+    
     # Calculate sleep_time based on bed_time and wake_up_time
-    sleep_time = ifelse(bed_time <= wake_up_time,
-                        wake_up_time - bed_time,
-                        24 * 60 * 60 - bed_time + wake_up_time),
+    sleep_time = ifelse(
+      bed_time <= wake_up_time,
+      wake_up_time - bed_time,
+      24 * 60 * 60 - bed_time + wake_up_time
+    ),
     # Convert sleep_time from seconds to hours
     sleep_time = sleep_time / 60 / 60,
     # Apply a correction for potential errors or outliers
@@ -327,7 +344,7 @@ srss_clean <- merge(srss, info, by = "courriel") |>
     sleep_load = sleep_time * sleep_quality,
     injured = ifelse(injured == "NULL", NA, injured),
     comments = ifelse(comments == "NULL", NA, comments)
-  ) |> 
+  ) |>
   select(
     date,
     horodatage,
@@ -348,6 +365,17 @@ srss_clean <- merge(srss, info, by = "courriel") |>
   mutate(missed_form_date = as.Date(missed_form_date)) |>
   mutate(date = ifelse(!is.na(missed_form_date), missed_form_date, date),
          date = as.Date(date)) |>
+  # Adjust date for duplicate entries mercier time form 23:30 = date same day form morning
+  group_by(nom, date) |>
+  mutate(
+    date = case_when(
+      duplicated(date) ~ date - 1,  # Subtract one day if duplicate date
+      TRUE ~ date  # Keep the original date otherwise
+    )
+  ) |>
+  
+  # correct if bet time is 12:00:00 tranform to 24:00:00 but need to be 00:00:00
+  
   # order date for roll av
   arrange(date)
 ```
@@ -375,12 +403,15 @@ data_cp <- athletes_power_clean |>
             ~ round(.))
 
 intervals_power <-
-  left_join(athletes_power_clean, data_cp, by = c("courriel")) 
+  left_join(athletes_power_clean, data_cp, by = c("courriel")) |> 
+  mutate(cp_wkg = cp / poids_kg)
+
 ```
 
 ```{r vars intervals wellness}
 intervals_wellness <- athletes_wellness_clean |>
   rename(rhr = restingHR) |>
+  group_by(nom) |>
   mutate(across(
     c(hrv, rhr),
     list(
@@ -404,9 +435,11 @@ intervals_wellness <- athletes_wellness_clean |>
       ),
       rsd7 = ~ roll_sd(., 7, min_obs = 1),
       norm = ~ 0.75 * roll_sd(., 60, min_obs = 1)
-    )
+          ),
+    .names = "{.col}_{.fn}"
   )) |>
-  mutate(hrv_cv_ravg7 = hrv_rsd7 / hrv_ravg7 * 100)
+  mutate(hrv_cv_ravg7 = hrv_rsd7 / hrv_ravg7 * 100) |> 
+  ungroup()
 ```
 
 ```{r vars intervals activities}
@@ -426,6 +459,10 @@ calculate_metrics <- function(data, prefix) {
 
 # Apply the function for both load_rpe and load_rpe_velo
 intervals_activities <- athletes_activities_clean %>%
+  group_by(nom) %>%
+  # filter df to get the first day the form was filed and limit computing time
+  filter(date >= date("2024-01-17")) %>%
+  ungroup() |>
   group_by(date, ath_id) %>%
   mutate(
     lutrimp_zone1_bike = hr_z1_secs_bike + hr_z2_secs_bike * 1,
@@ -449,6 +486,8 @@ intervals_activities <- athletes_activities_clean %>%
   calculate_metrics(., "icu_joules_bike") %>%
   calculate_metrics(., "lutrimp_bike") %>%
   calculate_metrics(., "icu_training_load_bike") %>%
+  mutate_at(vars(icu_average_watts_bike, average_heartrate_bike),
+            ~ replace(., . == 0, NA)) |> 
   mutate(
     # aerobic efficiency
     efficacite_aerobique_bike = icu_average_watts_bike / average_heartrate_bike,
@@ -564,6 +603,24 @@ srss_wellness <- srss_clean |>
     wellness = rowMeans(select(cur_data_all(), ends_with("_z")), na.rm = TRUE),
     wellness_t = rowMeans(select(cur_data_all(), ends_with("_t")), na.rm = TRUE),
     wellness_norm = 0.75 * (roll_sd(wellness, 60, min_obs = 1)),
+    wellness_t_ravg7 = rollapply(
+      wellness_t,
+      7,
+      mean,
+      na.rm = TRUE,
+      fill = NA,
+      align = 'right',
+      partial = TRUE
+    ),
+    wellness_t_ravg60 = rollapply(
+      wellness_t,
+      60,
+      mean,
+      na.rm = TRUE,
+      fill = NA,
+      align = 'right',
+      partial = TRUE
+    ),
     wellness_norm_t = 0.75 * (roll_sd(wellness_t, 60, min_obs = 1))
   ) |>
   ungroup() |>
@@ -688,15 +745,41 @@ calculate_metrics <- function(data, prefix) {
 }
 
 # Apply the function for both load_rpe and load_rpe_velo
-srss_wellness_training <- merge(srss_wellness, srss_training_day, by = c("date", "nom"), all = TRUE) %>%
+srss_wellness_training <-
+  merge(srss_wellness,
+        srss_training_day,
+        by = c("date", "nom"),
+        all = TRUE) %>%
   group_by(nom) %>%
-  fill(c(courriel, hrv_android_minus_1d, ath_id, api_key), .direction = "up") %>%
+  fill(c(courriel, hrv_android_minus_1d, ath_id, api_key),
+       .direction = "up") %>%
   ungroup() %>%
-  filter(n() > 1) %>% 
+  filter(n() > 1) %>%
   mutate(across(c(load_rpe, load_rpe_velo), ~ replace(., is.na(.), 0))) %>%
   group_by(nom) %>%
   calculate_metrics(., "load_rpe") %>%
   calculate_metrics(., "load_rpe_velo") %>%
+  mutate(
+    feeling_training_mean_velo_ravg7 = rollapply(
+      feeling_training_mean_velo,
+      7,
+      mean,
+      na.rm = TRUE,
+      fill = NA,
+      align = 'right',
+      partial = TRUE
+    ),
+    feeling_training_mean_velo_ravg60_bike = rollapply(
+      feeling_training_mean_velo,
+      60,
+      mean,
+      na.rm = TRUE,
+      fill = NA,
+      align = 'right',
+      partial = TRUE
+    ),
+    feeling_training_mean_velo_norm = 0.75 * (roll_sd(feeling_training_mean_velo, 60, min_obs = 1))
+  ) |>
   ungroup()
 ```
 
@@ -823,3 +906,9 @@ percentage_responses <- full_df %>%
          icu_joules_bike_percent,
          lutrimp_bike_percent)
 ```
+
+```{r csv}
+write.csv(database, file = "~/Desktop/Ltips/etude_ai/database.csv", row.names = FALSE)
+write.csv(intervals_power, file = "~/Desktop/Ltips/etude_ai/mmp.csv", row.names = FALSE)
+```
+
