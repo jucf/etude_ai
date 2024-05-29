@@ -9,14 +9,14 @@ output:
     latex_engine: xelatex
 bibliography: /Users/julescusson-fradet/Library/CloudStorage/GoogleDrive-jules.cusson.fradet@gmail.com/Mon disque/paperpile.bib
 csl: apa-6th-edition.csl
-params:
-   athlete_selected: params$athlete_selected
-   selection_debut: params$selection_debut
-   selection_fin: params$selection_fin
 # params:
-   # athlete_selected: "Tamara Kroll"
-   # selection_debut: "2024-04-04"
-   # selection_fin: "2024-05-01"
+#    athlete_selected: params$athlete_selected
+#    selection_debut: params$selection_debut
+#    selection_fin: params$selection_fin
+params:
+   athlete_selected: "Mick Déry"
+   selection_debut: "2024-05-02"
+   selection_fin: "2024-05-29"
 header-includes:
 - \usepackage{geometry}
 - \geometry{left=0.45in, right=0.45in, top=0.65in, bottom=0.50in} # Adjust margins as needed
@@ -1524,8 +1524,8 @@ gg_sommeil <-
   annotate(
     "text",
     x = max(df_am_pm$date),
-    y = round(mean(data_filt$sleep_quality, na.rm = TRUE), digits = 2),
-    label = paste0(round(mean(data_filt$sleep_quality, na.rm = TRUE), digits = 2)),
+    y = as.numeric(format(round(mean(data_filt$sleep_quality, na.rm = TRUE), digits = 2), nsmall = 2)),
+    label = paste0(format(round(mean(data_filt$sleep_quality, na.rm = TRUE), digits = 2), nsmall = 2)),       
     color = "black",
     hjust = -1.5,
     vjust = 0,
@@ -1595,8 +1595,8 @@ gg_temps_sommeil <-
   annotate(
     "text",
     x = max(df_am_pm$date),
-    y = round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 1),
-    label = paste0(round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 2)),
+    y = as.numeric(format(round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 2), nsmall = 2)),
+    label = paste0(format(round(mean(data_filt$sleep_time, na.rm = TRUE), digits = 2), nsmall = 2)),
     color = "black",
     hjust = -1.5,
     vjust = 0,
