@@ -1,5 +1,5 @@
 ---
-title: "Rapport d'analyse mensuel du projet de recherche L-Tips-UQTR"
+title: "Rapport d'analyse hebdomadaire du projet de recherche L-Tips-UQTR"
 date: 
 dev: cairo_pdf
 df_print: paged
@@ -252,6 +252,8 @@ percentage_responses <- full_df %>%
 
 (`r date_yaml`)
 
+**Semaine :** Lundi `r (as.Date(params$selection_fin) - days(5))` (identifié par les \colorbox{lightgray}{zones ombragées})
+
 * Votre pourcentage de réponses au questionnaire est de **`r (percentage_responses$form_percent)`**%. 
 * Vous avez utilisé votre  capteur de puissance pour **`r (percentage_responses$icu_joules_bike_percent)`**% de vos entraînements notés via le questionnaire.  
 * Vous avez utilisé votre moniteur de fréquence cardiaque pour **`r (percentage_responses$lutrimp_bike_percent)`**% de vos entraînements enregistrés avec capteur de puissance.
@@ -271,6 +273,13 @@ percentage_responses <- full_df %>%
 ```{r globale, fig.width=11, fig.height=13.5,  fig.cap="Évolution de la charge d’entraînement et des mesures descriptives (voir page suivante pour les détails)."}
 #charge
 gg1 <- ggplot(data_filt %>% filter(!is.na(load_rpe)), aes(date, weight = load_rpe / 1000)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_rug(sides = "b", size = 4.5, aes(color = training_phase)) +
   scale_color_manual(
     name = "Phases:",
@@ -324,6 +333,13 @@ df_ACWR <- data_filt %>%
 gg2 <-
   ggplot(df_ACWR %>% filter(!is.na(load_rpe)),
          aes(x = date, y = ACWR_load_rpe, fill = ACWR_load_rpe)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(stat = "identity", width = 0.4,  alpha = 0.6, aes(fill = cut(ACWR_load_rpe, c(
     -Inf, 0.8, 1.3, 1.5, Inf
   )))) +
@@ -371,6 +387,13 @@ ath_fra <- data_filt %>%
 gg3 <-
   ggplot(ath_fra %>% filter(!is.na(load_rpe)),
          aes(x = date, y = fraicheur_load_rpe / 1000, fill = fraicheur_load_rpe)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(stat = "identity", width = 0.4,  alpha = 0.6, aes(fill = cut(fraicheur_load_rpe / 1000, c(
     -Inf, -0.5, 0, 0.9, Inf
   )))) +
@@ -416,6 +439,13 @@ ath_mono <- data_filt %>%
 gg4 <-
   ggplot(ath_mono %>% filter(!is.na(load_rpe)),
          aes(x = date, y = monotonie_load_rpe, fill = monotonie_load_rpe)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(stat = "identity", width = 0.4,  alpha = 0.6, aes(fill = cut(monotonie_load_rpe, c(0, 1.5, 2, Inf)))) +
   scale_fill_manual(
     name = "",
@@ -522,6 +552,13 @@ df_j_lutrimp_rpe_ravg <- data_filt %>%
   
   gg_j_lutrimp_rpe_ravg <- df_j_lutrimp_rpe_ravg %>%
     ggplot(aes(x = date)) +
+    annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
      geom_rug(sides = "b", size = 5, aes(color = data_filt$training_phase)) +
   scale_color_manual(
     name = "Phases:",
@@ -632,6 +669,13 @@ df_j_lutrimp_rpe_ravg <- data_filt %>%
       x = jour,
       fill = fct_rev(zones)
     )) +
+    annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
     geom_area(aes(color = fct_rev(zones)), size = 1) +
     scale_fill_manual(
       values = alpha(c("#FF6A6A", "#EEB422", "#00FA9A"), 0.5),
@@ -669,6 +713,13 @@ df_j_lutrimp_rpe_ravg <- data_filt %>%
     # remplacer NA par dernière valeur
     na.locf(na.rm = FALSE) %>%
     ggplot(aes(date)) +
+      annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
     geom_ribbon(aes(
       ymin = (hrv_ravg60 - hrv_norm),
       ymax = (hrv_ravg60 + hrv_norm),
@@ -711,6 +762,13 @@ df_j_lutrimp_rpe_ravg <- data_filt %>%
   gg_wel <-
     ggplot(data_filt %>% filter(!is.na(wellness)),
            aes(date, wellness, color = wellness)) +
+    annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
     geom_point(size = 2) +
     geom_line() +
     scale_color_gradient2(
@@ -782,6 +840,13 @@ df_j_lutrimp_rpe_ravg <- data_filt %>%
   gg_perf <-
     ggplot(data_filt %>% filter(!is.na(feeling_training_mean_velo)),
            aes(date, weight = feeling_training_mean_velo)) +
+    annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
     geom_ribbon(aes(
       ymin = (feeling_training_mean_velo_ravg60_bike - feeling_training_mean_velo_norm),
       ymax = (feeling_training_mean_velo_ravg60_bike + feeling_training_mean_velo_norm),
@@ -826,6 +891,13 @@ df_j_lutrimp_rpe_ravg <- data_filt %>%
     # remplacer NA par dernière valeur
     na.locf(na.rm = FALSE) %>%
     ggplot(aes(date)) +
+    annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
     geom_ribbon(aes(
       ymin = (efficacite_aerobique_ravg60_bike - efficacite_aerobique_norm_bike),
       ymax = (efficacite_aerobique_ravg60_bike + efficacite_aerobique_norm_bike),
@@ -913,6 +985,13 @@ Relation entre la puissance et la fréquence cardiaque. Intuitivement, une fréq
 ```{r recup, fig.width=11, fig.height=13.5, fig.cap="Analyse des variations de l'état de récupération (voir page suivante pour les détails)."}
 gg_recup <- ggplot(data_filt %>% filter(!is.na(overall_recovery)),
        aes(date, weight = overall_recovery)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_rug(sides = "b", size = 6.5, aes(color = training_phase)) +
   scale_color_manual(
     name = "Phases:",
@@ -970,6 +1049,13 @@ gg_recup <- ggplot(data_filt %>% filter(!is.na(overall_recovery)),
 gg_phys <-
   ggplot(data_filt %>% filter(!is.na(physical_performance_capability)),
          aes(date, weight = physical_performance_capability)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (
@@ -1028,6 +1114,13 @@ gg_phys <-
 gg_mental <-
   ggplot(data_filt %>% filter(!is.na(mental_performance_capability)),
          aes(date, weight = mental_performance_capability)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (
@@ -1086,6 +1179,13 @@ gg_mental <-
 gg_bal_emo <-
   ggplot(data_filt %>% filter(!is.na(emotional_balance)),
          aes(date, weight = emotional_balance)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (emotional_balance_ravg60 - emotional_balance_norm),
@@ -1177,6 +1277,13 @@ Les bandes de couleur translucides (Valeurs normales (60 jours)) autour des lign
 gg_stress <-
   ggplot(data_filt %>% filter(!is.na(overall_stress)),
          aes(date, weight = overall_stress)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_rug(sides = "b", size = 6.5, aes(color = training_phase)) +
   scale_color_manual(
     name = "Phases:",
@@ -1232,6 +1339,13 @@ gg_stress <-
 gg_musc <-
   ggplot(data_filt %>% filter(!is.na(muscular_stress)),
          aes(date, weight = muscular_stress)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (muscular_stress_ravg60 - muscular_stress_norm),
@@ -1285,6 +1399,13 @@ gg_musc <-
 gg_acti <-
   ggplot(data_filt %>% filter(!is.na(lack_of_activation)),
          aes(date, weight = lack_of_activation)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (lack_of_activation_ravg60 - lack_of_activation_norm),
@@ -1339,6 +1460,13 @@ gg_acti <-
 gg_neg_emo <-
   ggplot(data_filt %>% filter(!is.na(negative_emotional_state)),
          aes(date, weight = negative_emotional_state)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (
@@ -1463,6 +1591,13 @@ df_am_pm <- data_filt %>%
 
 gg_sommeil <-
   ggplot(data_filt %>% filter(!is.na(sleep_quality)), aes(date, weight = sleep_quality)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_rug(sides = "b", size = 6.5, aes(color = training_phase)) +
   scale_color_manual(
     name = "Phases:",
@@ -1548,6 +1683,13 @@ gg_sommeil <-
 gg_temps_sommeil <-
   ggplot(data_filt %>% filter(!is.na(sleep_time)),
          aes(date, weight = sleep_time, group = 1)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_bar(fill = "#E0EEEE", width = 0.5) +
   geom_ribbon(aes(
     ymin = (sleep_time_ravg60 - sleep_time_norm),
@@ -1618,6 +1760,14 @@ gg_temps_sommeil <-
 
 gg_heure_couche <-
   ggplot(df_am_pm, aes(x = date, y = graph_dttm_bed)) +
+  annotate(
+    "rect",
+    xmin = max(as.Date(df_am_pm$date, format = "%Y-%m-%d") - days(5)),
+    xmax = max(as.Date(df_am_pm$date, format = "%Y-%m-%d")),
+    ymin = round_date(min(df_am_pm$graph_dttm_bed - 5400), "1 hours"),
+    ymax = round_date(max(df_am_pm$graph_dttm_bed + 5400), "1 hours"), 
+    color = NA, alpha = 0.075
+  ) +
    geom_hline(yintercept = mean(df_am_pm$graph_dttm_bed),
              linetype = "dotted",  # Specify linetype directly
              color = "grey",
@@ -1723,6 +1873,14 @@ gg_heure_couche <-
 
 gg_heure_leve <-
   ggplot(df_am_pm, aes(x = date, y = graph_dttm_wake)) +
+  annotate(
+    "rect",
+    xmin = max(as.Date(df_am_pm$date, format = "%Y-%m-%d") - days(5)),
+    xmax = max(as.Date(df_am_pm$date, format = "%Y-%m-%d")),
+    ymin = round_date(min(df_am_pm$graph_dttm_wake - 3600), "1 hours"),
+    ymax = round_date(max(df_am_pm$graph_dttm_wake + 3600), "1 hours"), 
+    color = NA, alpha = 0.075
+  ) +
   geom_hline(yintercept = mean(df_am_pm$graph_dttm_wake),
              linetype = "dotted",  # Specify linetype directly
              color = "grey",
@@ -1829,6 +1987,13 @@ gg_heure_leve <-
 gg_charge_sommeil <-
   ggplot(data_filt %>% filter(!is.na(sleep_load_ravg7)),
          aes(date, sleep_load_ravg7, group = 1)) +
+  annotate(
+    "rect",
+    xmin = as.Date(as.Date(params$selection_fin) - days(5)), 
+    xmax = as.Date(as.Date(params$selection_fin)),
+    ymin = -Inf, ymax = Inf,
+    color = NA, alpha = 0.075
+  ) +
   geom_area(fill = "#87CEFA", alpha = 0.4) +
   geom_line(aes(color = "Tendance (7 jours)"), size = 1.5) +
   scale_color_manual(
