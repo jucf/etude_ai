@@ -49,7 +49,7 @@ hist <- read_sheet_clean(hist_url, "Réponses au formulaire 1") |>
          age = as.numeric(difftime(Sys.Date(), date_de_naissance, units = "days")) / 365.25)
 
 info <- read_sheet_clean(ss_url, "info") |>
-  select(-c(virement, lien_forms:max_number_6)) |>
+  select(-c(virement, lien_forms:last_col())) |>
   unite(nom, prenom, nom, sep = " ", remove = TRUE) |>
   mutate(ath_id = unlist(ath_id)) 
 
@@ -315,29 +315,28 @@ srss_clean <- merge(srss, info, by = "courriel") |>
   mutate(
     bed_time = as_hms(bed_time),
     wake_up_time = as_hms(wake_up_time),
-    # Adjust bed_time to 24-hour format if it's between 6 am and 6 pm but not for Alain St-Louis
-    bed_time =
-      ifelse(
-        bed_time >= 6 * 60 * 60 &
-          bed_time <= 18 * 60 * 60 &
-          courriel != "alainst_louis@hotmail.com",
-      bed_time + 12 * 60 * 60,
-      bed_time
+    # Convert bed_time to 24-hour format if it's set between 7:00 AM and 7:00 PM and courriel is not "alainst_louis@hotmail.com"
+    bed_time = ifelse(
+        hour(bed_time) >= 7 & hour(bed_time) < 19 & courriel != "alainst_louis@hotmail.com",
+        bed_time + 12 * 60 * 60,  # Add 12 hours
+        bed_time
     ),
-    # Convert bed_time to hms format
+    # Convert wake_up_time to 24-hour format if it's set between 4:00 PM and 4:00 AM
+    wake_up_time = ifelse(
+        hour(wake_up_time) >= 16 | hour(wake_up_time) < 4,
+        wake_up_time + ifelse(hour(wake_up_time) < 6, 12 * 60 * 60, -12 * 60 * 60), # Subtract 12 hours 
+        wake_up_time
+    ),
     bed_time = as_hms(bed_time),
-    
-    # Adjust wake_up_time to 24-hour format if it's 18h instead of 6h
-
-    
+    wake_up_time = as_hms(wake_up_time),
     # Calculate sleep_time based on bed_time and wake_up_time
     sleep_time = ifelse(
-      bed_time <= wake_up_time,
-      wake_up_time - bed_time,
-      24 * 60 * 60 - bed_time + wake_up_time
+        bed_time <= wake_up_time,
+        wake_up_time - bed_time,
+        24 * 60 * 60 - bed_time + wake_up_time
     ),
     # Convert sleep_time from seconds to hours
-    sleep_time = sleep_time / 60 / 60,
+    sleep_time = sleep_time / 3600,  # Convert to hours
     # Apply a correction for potential errors or outliers
     sleep_time =
       ifelse(sleep_time < 0 | sleep_time > 15, 8, sleep_time),
@@ -883,6 +882,52 @@ full_df <- full_date_period |>
 
 # Now, calculate the percentage of responses for each person
 percentage_responses <- full_df %>%
+  select(nom, date, overall_recovery, load_rpe_velo, icu_joules_bike, lutrimp_bike) |> 
+  # vars 0 to NA
+  mutate_if(is.numeric, list(~ ifelse(. == 0, NA, .))) |> 
+  group_by(nom) %>%
+  # summarize but not for date column
+  summarize(across(-date, ~ sum(!is.na(.)) / length(.)),
+            total_days = n_distinct(date)) %>%
+  mutate(
+    form_percent = round(overall_recovery * 100),
+    icu_joules_bike_percent = round(icu_joules_bike / load_rpe_velo * 100),
+    # correction si plus de jour avec pwr ou fc que rpe
+    icu_joules_bike_percent = ifelse(icu_joules_bike_percent > 100, 100, icu_joules_bike_percent),
+    lutrimp_bike_percent = round(lutrimp_bike / icu_joules_bike * 100),
+    # correction si moins de jour avec pwr que fc
+    lutrimp_bike_percent = ifelse(lutrimp_bike_percent > 100, 100, lutrimp_bike_percent)
+  ) %>%
+  ungroup() %>%
+  select(nom,
+         total_days,
+         form_percent,
+         icu_joules_bike_percent,
+         lutrimp_bike_percent)
+
+# stats 18 weeks or + ####
+# test code first to last reponse form date 18 weeks or + if continu
+response_first_last <- filtered_df %>%
+  group_by(nom) %>%
+  summarize(first_response_date = min(date),
+            last_response_date = max(date[!is.na(overall_recovery) &
+                                            cumsum(!is.na(overall_recovery)) > 0]))
+
+# Create a sequence of dates from the earliest to the latest response date for each person
+full_date_period_18 <- response_first_last |>
+  mutate(date = map2(
+    first_response_date,
+    last_response_date,
+    ~ seq.Date(from = .x, to = .y, by = "1 day")
+  )) |>
+  unnest(date)
+
+# Merge the full date period with the original dataset to fill in missing dates
+full_df_18 <- full_date_period_18 |>
+  left_join(filtered_df, by = c("nom", "date"))
+
+# Now, calculate the percentage of responses for each person
+percentage_responses_18 <- full_df_18 %>%
   select(nom, date, overall_recovery, load_rpe_velo, icu_joules_bike, lutrimp_bike) |> 
   # vars 0 to NA
   mutate_if(is.numeric, list(~ ifelse(. == 0, NA, .))) |> 
